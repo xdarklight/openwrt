@@ -1,0 +1,27 @@
+From c1dae15aa549b8c1bc952ecb6d64888c2fb5faf7 Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Fri, 5 Jul 2019 14:32:55 +0200
+Subject: [PATCH] MIPS: lantiq: update the clock alias' for the mainline PCIe
+ RC driver
+
+Update the PCIe controller clock alias' to match what the mainline PCIe
+driver expects. The naming "pcie_bus" is taken from the DesignWare PCIe
+controller bindings, because the Lantiq PCIe controller is based on the
+DesignWare PCIe controller.
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ arch/mips/lantiq/xway/sysctrl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/arch/mips/lantiq/xway/sysctrl.c
++++ b/arch/mips/lantiq/xway/sysctrl.c
+@@ -548,7 +548,7 @@ void __init ltq_soc_init(void)
+ 		clkdev_add_pmu("1f203034.usb2-phy", "phy", 1, 0, PMU_USB1_P);
+ 		clkdev_add_pmu("1e106000.usb", "otg", 1, 0, PMU_USB1 | PMU_AHBM);
+ 		clkdev_add_pmu("1f106800.phy", "phy", 1, 1, PMU1_PCIE_PHY);
+-		clkdev_add_pmu("1d900000.pcie", "bus", 1, 0, PMU_PCIE_CLK);
++		clkdev_add_pmu("1d900000.pcie", "pcie_bus", 1, 0, PMU_PCIE_CLK);
+ 		clkdev_add_pmu("1d900000.pcie", "msi", 1, 1, PMU1_PCIE_MSI);
+ 		clkdev_add_pmu("1f106800.phy", "pdi", 1, 1, PMU1_PCIE_PDI);
+ 		clkdev_add_pmu("1d900000.pcie", "ctl", 1, 1, PMU1_PCIE_CTL);
