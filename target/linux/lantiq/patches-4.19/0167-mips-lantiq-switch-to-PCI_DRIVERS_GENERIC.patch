@@ -1,0 +1,26 @@
+From fcea4c1af2d3a661a4b0c28ebb7236a933bcdc79 Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Fri, 5 Jul 2019 14:06:09 +0200
+Subject: [PATCH 5/5] mips: lantiq: switch to PCI_DRIVERS_GENERIC
+
+The Lantiq PCI-Express controller IP is based on the DesignWare PCIe
+controller. The driver for this does not work with the legacy MIPS PCI
+framework and needs PCI_DRIVERS_GENERIC instead.
+Select PCI_DRIVERS_GENERIC for the LANTIQ target to disable
+PCI_DRIVERS_LEGACY.
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ arch/mips/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/arch/mips/Kconfig
++++ b/arch/mips/Kconfig
+@@ -398,6 +398,7 @@ config LANTIQ
+ 	select IRQ_MIPS_CPU
+ 	select CEVT_R4K
+ 	select CSRC_R4K
++	select PCI_DRIVERS_GENERIC
+ 	select SYS_HAS_CPU_MIPS32_R1
+ 	select SYS_HAS_CPU_MIPS32_R2
+ 	select SYS_SUPPORTS_BIG_ENDIAN

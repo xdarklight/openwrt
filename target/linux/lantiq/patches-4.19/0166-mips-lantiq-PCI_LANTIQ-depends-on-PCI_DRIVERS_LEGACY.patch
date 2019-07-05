@@ -1,0 +1,23 @@
+From 9596f40873829565343c606f17e9948cbbd3d316 Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Fri, 5 Jul 2019 14:08:53 +0200
+Subject: [PATCH 4/5] mips: lantiq: PCI_LANTIQ depends on PCI_DRIVERS_LEGACY
+
+The Lantiq PCI driver uses functionality from the legacy MIPS PCI
+framework. Thus it does not compile when PCI_DRIVERS_LEGACY is disabled.
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ arch/mips/lantiq/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/arch/mips/lantiq/Kconfig
++++ b/arch/mips/lantiq/Kconfig
+@@ -51,6 +51,7 @@ endchoice
+ config PCI_LANTIQ
+ 	bool "PCI Support"
+ 	depends on SOC_XWAY && PCI
++	depends on PCI_DRIVERS_LEGACY
+ 
+ config XRX200_PHY_FW
+ 	bool "XRX200 PHY firmware loader"

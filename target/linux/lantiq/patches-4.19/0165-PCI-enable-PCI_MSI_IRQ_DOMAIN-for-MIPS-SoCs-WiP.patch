@@ -1,0 +1,23 @@
+From 9e1c398c5cd095de6ebfb8fc3f31b359c78d5da8 Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Tue, 2 Jul 2019 00:21:19 +0200
+Subject: [PATCH 3/5] PCI: enable PCI_MSI_IRQ_DOMAIN for MIPS SoCs - WiP
+
+WiP - how does this work?
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ drivers/pci/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/pci/Kconfig
++++ b/drivers/pci/Kconfig
+@@ -22,7 +22,7 @@ config PCI_MSI
+ 	   If you don't know what to do here, say Y.
+ 
+ config PCI_MSI_IRQ_DOMAIN
+-	def_bool ARC || ARM || ARM64 || X86
++	def_bool ARC || ARM || ARM64 || MIPS || X86
+ 	depends on PCI_MSI
+ 	select GENERIC_MSI_IRQ_DOMAIN
+ 
