@@ -315,25 +315,59 @@
 		};
 
 		pcie0: pcie@d900000 {
-			compatible = "lantiq,pcie-xrx200";
+			compatible = "lantiq,vrx200-pcie", "lantiq,dw-pcie", "snps,dw-pcie";
 
-			#interrupt-cells = <1>;
-			#size-cells = <2>;
+			reg = <0xd900000 0x1000>,
+			      <0xd000000 0x800000>,
+			      <0xe100900 0x200>;
+			reg-names = "dbi", "config", "app";
+
+			ranges = <0x1000000 0 0          0xd800000 0 0x0100000   /* I/O */
+				  0x2000000 0 0x1c000000 0xc000000 0 0x1000000>; /* MEM */
+			bus-range = <0x0 0x8>;
+
 			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
 
 			interrupt-parent = <&icu0>;
-			interrupts = <161 144>;
+			interrupts = <161>;
+			interrupt-names = "ir";
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 0x7>;
+			interrupt-map = <0 0 0 1 &icu0 144>, /* int_a */
+					<0 0 0 2 &icu0 145>, /* int_b */
+					<0 0 0 3 &icu0 146>, /* int_c */
+					<0 0 0 4 &icu0 147>; /* int_d */
+
+			lantiq,rcu = <&rcu0>;
+			lantiq,rcu-endian-offset = <0x4c>;
+			lantiq,rcu-inbound-big-endian-mask = <0x2>; /* bit 1 */
+			lantiq,rcu-outbound-big-endian-mask = <0x14>; /* bit 4 */
+			big-endian;
+
+			resets = <&reset0 22 22>;
 
 			phys = <&pcie0_phy LANTIQ_PCIE_PHY_MODE_36MHZ>;
 			phy-names = "pcie";
 
-			resets = <&reset0 22 22>;
+			num-lanes = <1>;
 
-			lantiq,rcu = <&rcu0>;
+			reset-gpios = <&gpio 38 GPIO_ACTIVE_LOW>;
 
-			device_type = "pci";
+			pcie_bridge1: bridge@1,0 {
+				#size-cells = <2>;
+				#address-cells = <3>;
+				reg = <0x800 0 0 0 0>;
+				ranges;
+			};
 
-			gpio-reset = <&gpio 38 GPIO_ACTIVE_HIGH>;
+			pcie_bridge0: bridge@2,0 {
+				#size-cells = <2>;
+				#address-cells = <3>;
+				reg = <0x1000 0 0 0 0>;
+				ranges;
+			};
 		};
 
 		pci0: pci@e105400 {
@@ -344,8 +378,8 @@
 			#interrupt-cells = <1>;
 			compatible = "lantiq,pci-xway";
 			bus-range = <0x0 0x0>;
-			ranges = <0x2000000 0 0x8000000 0x8000000 0 0x2000000   /* pci memory */
-				0x1000000 0 0x00000000 0xae00000 0 0x200000>; /* io space */
+			ranges = <0x2000000 0 0x08000000 0x08000000 0 0x2000000   /* pci memory */
+				  0x1000000 0 0x00000000 0x1ae00000 0 0x0200000>; /* io space */
 			reg = <0x7000000 0x8000         /* config space */
 				0xe105400 0x400>;       /* pci bridge */
 			lantiq,bus-clock = <33333333>;
