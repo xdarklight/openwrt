@@ -35,7 +35,7 @@ ath10k_caldata_set_macaddr() {
 }
 
 case "$FIRMWARE" in
-"ath10k/cal-pci-0000:02:00.0.bin")
+"ath10k/cal-pci-0000:01:00.0.bin")
 	board=$(board_name)
 	case $board in
 		bt,homehub-v5a)
