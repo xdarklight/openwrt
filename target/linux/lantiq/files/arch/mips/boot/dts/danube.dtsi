@@ -231,16 +231,18 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			#interrupt-cells = <1>;
-			compatible = "lantiq,pci-xway";
-			bus-range = <0x0 0x0>;
-			ranges = <0x2000000 0 0x8000000 0x8000000 0 0x2000000	/* pci memory */
-				  0x1000000 0 0x00000000 0xae00000 0 0x200000>;	/* io space */
+			compatible = "lantiq,danube-pci", "lantiq,xway-pci";
+			bus-range = <0x0 0xf>;
+			ranges = <0x2000000 0 0x18000000 0x8000000 0 0x2000000   /* MEM */
+				  0x1000000 0 0          0xae00000 0 0x0200000>; /* I/O */
 			reg = <0x7000000 0x8000		/* config space */
 				0xe105400 0x400>;	/* pci bridge */
 			lantiq,bus-clock = <33333333>;
 			interrupt-map-mask = <0xf800 0x0 0x0 0x7>;
 			interrupt-map = <0x7000 0 0 1 &ebu0 0 IRQ_TYPE_LEVEL_LOW>; /* slot 14 */
 			req-mask = <0x1>; /* GNT1 */
+			resets = <&reset0 13 13>;
+			resets = <&reset0 13 13>;
 		};
 	};
 
