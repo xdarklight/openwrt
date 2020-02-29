@@ -288,10 +288,17 @@ static int ppe_ioctl(struct atm_dev *dev, unsigned int cmd, void *arg)
 			|| _IOC_NR(cmd) >= PPE_ATM_IOC_MAXNR )
 		return -ENOTTY;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,0,0)
+	if ( _IOC_DIR(cmd) & _IOC_READ )
+		ret = !access_ok(arg, _IOC_SIZE(cmd));
+	else if ( _IOC_DIR(cmd) & _IOC_WRITE )
+		ret = !access_ok(arg, _IOC_SIZE(cmd));
+#else
 	if ( _IOC_DIR(cmd) & _IOC_READ )
 		ret = !access_ok(VERIFY_WRITE, arg, _IOC_SIZE(cmd));
 	else if ( _IOC_DIR(cmd) & _IOC_WRITE )
 		ret = !access_ok(VERIFY_READ, arg, _IOC_SIZE(cmd));
+#endif
 	if ( ret )
 		return -EFAULT;
 
