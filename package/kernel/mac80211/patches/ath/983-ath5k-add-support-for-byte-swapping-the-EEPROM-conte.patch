@@ -1,0 +1,74 @@
+From b0c54aaca585a9b2100e02d35a5e4f9847d020f0 Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Mon, 22 Jun 2020 20:50:08 +0200
+Subject: [PATCH 2/3] ath5k: add support for byte-swapping the EEPROM contents
+
+Some boards with the EEPROM stored in the main flash (which are then
+passing the link to the EEPROM data to ath5k using an nvmem-cell) have
+the data byte-swapped. In this case the magic word (0x5aa5) is
+byte-swapped as well (meaning it reads as 0xa55a).
+
+Read the EEPROM magic word during initialization and decide if swab16 is
+needed when reading the EEPROM data. Handle the swapping transparently
+in ath5k_hw_nvram_read() so the callers don't have to be updated.
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ drivers/net/wireless/ath/ath5k/eeprom.c | 20 ++++++++++++++++++--
+ drivers/net/wireless/ath/ath5k/eeprom.h |  1 +
+ 2 files changed, 19 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath5k/eeprom.c
++++ b/drivers/net/wireless/ath/ath5k/eeprom.c
+@@ -1747,6 +1747,7 @@ int
+ ath5k_eeprom_init(struct ath5k_hw *ah)
+ {
+ 	struct nvmem_cell *eeprom_nvmem_cell;
++	u16 val;
+ 	int err;
+ 
+ 	if (device_property_read_bool(ah->dev, "qca,no-eeprom")) {
+@@ -1755,6 +1756,15 @@ ath5k_eeprom_init(struct ath5k_hw *ah)
+ 			return PTR_ERR(eeprom_nvmem_cell);
+ 
+ 		ah->use_nvmem_eeprom = true;
++
++		AR5K_EEPROM_READ(AR5K_EEPROM_SIZE_UPPER, val);
++		ah->ah_capabilities.cap_eeprom.ee_magic_needs_swab16 =
++					swab16(val) == AR5K_EEPROM_MAGIC_VALUE;
++
++		ATH5K_DBG(ah, ATH5K_DEBUG_ANY,
++			  "EEPROM magic word: 0x%04x, swab16 %s needed\n",
++			  val,
++			  ah->ah_capabilities.cap_eeprom.ee_magic_needs_swab16 ? "is" : "not");
+ 	}
+ 
+ 	err = ath5k_eeprom_init_header(ah);
+@@ -1810,9 +1820,15 @@ bool
+ ath5k_hw_nvram_read(struct ath5k_hw *ah, u32 off, u16 *data)
+ {
+ 	struct ath_common *common = ath5k_hw_common(ah);
++	bool success;
+ 
+ 	if (ah->use_nvmem_eeprom)
+-		return !nvmem_cell_read_u16(ah->dev, "eeprom", data);
++		success = !nvmem_cell_read_u16(ah->dev, "eeprom", data);
++	else
++		success = common->bus_ops->eeprom_read(common, off, data);
++
++	if (success && ah->ah_capabilities.cap_eeprom.ee_magic_needs_swab16)
++		*data = swab16(*data);
+ 
+-	return common->bus_ops->eeprom_read(common, off, data);
++	return success;
+ }
+--- a/drivers/net/wireless/ath/ath5k/eeprom.h
++++ b/drivers/net/wireless/ath/ath5k/eeprom.h
+@@ -411,6 +411,7 @@ struct ath5k_eeprom_info {
+ 
+ 	/* Header information */
+ 	u16	ee_magic;
++	bool	ee_magic_needs_swab16;
+ 	u16	ee_protect;
+ 	u16	ee_regdomain;
+ 	u16	ee_version;

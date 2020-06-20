@@ -1,0 +1,56 @@
+From 65b279708e9f3a3a81c1cee9494238dcf1f6524d Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Mon, 8 Jun 2020 00:28:31 +0200
+Subject: [PATCH 3/3] ath5k: add support for reading the MAC address from
+ device-tree
+
+Some boards supported by OpenWrt don't have an EEPROM connected to the
+ath5k chip. Instead the MAC address is stored inside a read-only
+partition of the main flash memory. Add support for parsing the MAC
+address from device-tree. Fall back to using the MAC address from the
+EEPROM if device-tree passes no or an invalid MAC address.
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ drivers/net/wireless/ath/ath5k/ath5k.h  |  1 +
+ drivers/net/wireless/ath/ath5k/base.c   |  2 +-
+ drivers/net/wireless/ath/ath5k/eeprom.c | 10 ++++++++++
+ 3 files changed, 12 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/wireless/ath/ath5k/ath5k.h
++++ b/drivers/net/wireless/ath/ath5k/ath5k.h
+@@ -1533,6 +1533,7 @@ void ath5k_eeprom_detach(struct ath5k_hw
+ int ath5k_eeprom_mode_from_channel(struct ath5k_hw *ah,
+ 		struct ieee80211_channel *channel);
+ bool ath5k_hw_nvram_read(struct ath5k_hw *ah, u32 off, u16 *data);
++int ath5k_hw_nvram_get_mac_addr(struct ath5k_hw *ah, u8 *mac_addr);
+ 
+ /* Protocol Control Unit Functions */
+ /* Helpers */
+--- a/drivers/net/wireless/ath/ath5k/base.c
++++ b/drivers/net/wireless/ath/ath5k/base.c
+@@ -3082,7 +3082,7 @@ ath5k_init(struct ieee80211_hw *hw)
+ 	INIT_WORK(&ah->calib_work, ath5k_calibrate_work);
+ 	INIT_DELAYED_WORK(&ah->tx_complete_work, ath5k_tx_complete_poll_work);
+ 
+-	ret = ath5k_hw_common(ah)->bus_ops->eeprom_read_mac(ah, mac);
++	ret = ath5k_hw_nvram_get_mac_addr(ah, mac);
+ 	if (ret) {
+ 		ATH5K_ERR(ah, "unable to read address from EEPROM\n");
+ 		goto err_queues;
+--- a/drivers/net/wireless/ath/ath5k/eeprom.c
++++ b/drivers/net/wireless/ath/ath5k/eeprom.c
+@@ -1832,3 +1832,13 @@ ath5k_hw_nvram_read(struct ath5k_hw *ah,
+ 
+ 	return success;
+ }
++
++int
++ath5k_hw_nvram_get_mac_addr(struct ath5k_hw *ah, u8 *mac_addr)
++{
++	if (!eth_platform_get_mac_address(ah->dev, mac_addr) &&
++	    is_valid_ether_addr(mac_addr))
++		return 0;
++
++	return ath5k_hw_common(ah)->bus_ops->eeprom_read_mac(ah, mac_addr);
++}
