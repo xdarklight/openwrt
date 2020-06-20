@@ -24,14 +24,6 @@
 		reg = <0x0 0x4000000>;
 	};
 
-	ath5k_eep {
-		compatible = "ath5k,eeprom";
-		ath,eep-flash = <&boardconfig 0x400>;
-		ath,mac-offset = <0x16>;
-		ath,mac-increment = <1>;
-		ath,eep-swap;
-	};
-
 	keys {
 		compatible = "gpio-keys-polled";
 		poll-interval = <100>;
@@ -158,7 +150,13 @@
 			boardconfig: partition@400000 {
 				label = "boardconfig";
 				reg = <0x3f0000 0x10000>;
+				#address-cells = <1>;
+				#size-cells = <1>;
 				read-only;
+
+				ath5k_eeprom: calib@400 {
+					reg = <0x400 0x800>;
+				};
 			};
 		};
 	};
@@ -183,6 +181,16 @@
 
 	gpio-reset = <&gpio 21 GPIO_ACTIVE_HIGH>;
 	req-mask = <0xf>;
+
+	wifi@e,0,0 {
+		compatible = "pci168c,001d";
+		reg = <0x7000 0 0 0 0>;
+		qca,no-eeprom;
+		mtd-mac-address = <&boardconfig 0x16>;
+		mtd-mac-address-increment = <1>;
+		nvmem-cells = <&ath5k_eeprom>;
+		nvmem-cell-names = "eeprom";
+	};
 };
 
 &usb_phy {
