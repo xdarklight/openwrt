@@ -50,6 +50,23 @@ define Build/cybertan-trx
 	-rm $@-empty.bin
 endef
 
+define Build/edimax-headers
+	$(eval device_name=$(word 1,$(1)))
+	$(eval edimax_magic=$(word 2,$(1)))
+	$(eval edimax_model=$(word 3,$(1)))
+
+	$(STAGING_DIR_HOST)/bin/edimax_fw_header -M $(edimax_magic) -m $(edimax_model)\
+		-v $(VERSION_DIST)$(firstword $(subst +, , $(firstword $(subst -, ,$(REVISION))))) \
+		-n "uImage" \
+		-i "$(KDIR)/loader-$(device_name).uImage" \
+		-o $(IMAGE_KERNEL);
+	$(STAGING_DIR_HOST)/bin/edimax_fw_header -M $(edimax_magic) -m $(edimax_model)\
+		-v $(VERSION_DIST)$(firstword $(subst +, , $(firstword $(subst -, ,$(REVISION))))) \
+		-n "rootfs" \
+		-i "$(KDIR_TMP)/openwrt-ath79-generic-$(device_name)-squashfs-sysupgrade.bin" \
+		-o $(IMAGE_ROOTFS);
+endef
+
 # This needs to make /tmp/_sys/sysupgrade.tgz an empty file prior to
 # sysupgrade, as otherwise it will implant the old configuration from
 # OEM firmware when writing rootfs from factory.bin
@@ -353,6 +370,24 @@ define Device/avm_fritzdvbc
 	ath10k-firmware-qca988x-ct -swconfig
 endef
 TARGET_DEVICES += avm_fritzdvbc
+
+define Device/belkin_f9j1108-v2
+  SOC := qca9558
+  DEVICE_VENDOR := Belkin
+  DEVICE_MODEL := F9J1108 v2 (AC1750 DB Wi-Fi)
+  IMAGE_SIZE := 14464k
+  DEVICE_PACKAGES += ath10k-firmware-qca988x-ct kmod-usb2 kmod-usb3 kmod-usb-ledtrig-usbport
+  LOADER_TYPE := bin
+  LOADER_FLASH_OFFS := 0x50000
+  COMPILE := loader-$(1).bin loader-$(1).uImage
+  COMPILE/loader-$(1).bin := loader-okli-compile
+  COMPILE/loader-$(1).uImage := append-loader-okli $(1) | pad-to 64k | lzma | \
+	uImage lzma
+  KERNEL := kernel-bin | append-dtb | lzma | uImage lzma -M 0x4f4b4c49
+  IMAGES += factory.bin
+  IMAGE/factory.bin := edimax-headers $(1) F9J1108v1 BR-6679BAC | append-kernel | append-rootfs | check-size
+endef
+TARGET_DEVICES += belkin_f9j1108-v2
 
 define Device/buffalo_bhr-4grv
   $(Device/buffalo_common)
