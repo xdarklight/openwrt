@@ -59,12 +59,16 @@ define Build/edimax-headers
 		-v $(VERSION_DIST)$(firstword $(subst +, , $(firstword $(subst -, ,$(REVISION))))) \
 		-n "uImage" \
 		-i "$(KDIR)/loader-$(device_name).uImage" \
-		-o $(IMAGE_KERNEL);
+		-o "$@.uImage";
 	$(STAGING_DIR_HOST)/bin/edimax_fw_header -M $(edimax_magic) -m $(edimax_model)\
 		-v $(VERSION_DIST)$(firstword $(subst +, , $(firstword $(subst -, ,$(REVISION))))) \
 		-n "rootfs" \
-		-i "$(KDIR_TMP)/openwrt-ath79-generic-$(device_name)-squashfs-sysupgrade.bin" \
-		-o $(IMAGE_ROOTFS);
+		-i "$@" \
+		-o "$@.rootfs"; \
+	dd if="$@.uImage" > "$@.new"; \
+	dd if="$@.rootfs" >> "$@.new"; \
+	rm -rf "$@.uImage" "$@.rootfs"; \
+	mv "$@.new" "$@";
 endef
 
 # This needs to make /tmp/_sys/sysupgrade.tgz an empty file prior to
@@ -385,7 +389,8 @@ define Device/belkin_f9j1108-v2
 	uImage lzma
   KERNEL := kernel-bin | append-dtb | lzma | uImage lzma -M 0x4f4b4c49
   IMAGES += factory.bin
-  IMAGE/factory.bin := edimax-headers $(1) F9J1108v1 BR-6679BAC | append-kernel | append-rootfs | check-size
+  IMAGE/factory.bin := $$(IMAGE/sysupgrade.bin) | \
+	edimax-headers $(1) F9J1108v1 BR-6679BAC | check-size
 endef
 TARGET_DEVICES += belkin_f9j1108-v2
 
