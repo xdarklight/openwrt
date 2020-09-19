@@ -191,6 +191,22 @@ define Device/seama
   SEAMA_SIGNATURE :=
 endef
 
+define Device/edimax-headers
+  LOADER_TYPE := bin
+  LOADER_FLASH_OFFS := 0x50000
+  COMPILE := loader-$(1).bin loader-$(1).uImage
+  COMPILE/loader-$(1).bin := loader-okli-compile
+  COMPILE/loader-$(1).uImage := append-loader-okli $(1) | pad-to 64k | lzma | \
+	uImage lzma
+  KERNEL := kernel-bin | append-dtb | lzma | uImage lzma -M 0x4f4b4c49
+  IMAGES += factory.bin
+  IMAGE/factory.bin := $$(IMAGE/sysupgrade.bin) | \
+	edimax-headers $(1) $$$$(EDIMAX_HEADER_MAGIC) $$$$(EDIMAX_HEADER_MODEL) | \
+	check-size
+  EDIMAX_HEADER_MAGIC :=
+  EDIMAX_HEADER_MODEL :=
+endef
+
 
 define Device/8dev_carambola2
   SOC := ar9331
@@ -376,23 +392,28 @@ endef
 TARGET_DEVICES += avm_fritzdvbc
 
 define Device/belkin_f9j1108-v2
+  $(Device/edimax-headers)
   SOC := qca9558
   DEVICE_VENDOR := Belkin
   DEVICE_MODEL := F9J1108 v2 (AC1750 DB Wi-Fi)
   IMAGE_SIZE := 14464k
   DEVICE_PACKAGES += ath10k-firmware-qca988x-ct kmod-usb2 kmod-usb3 kmod-usb-ledtrig-usbport
-  LOADER_TYPE := bin
-  LOADER_FLASH_OFFS := 0x50000
-  COMPILE := loader-$(1).bin loader-$(1).uImage
-  COMPILE/loader-$(1).bin := loader-okli-compile
-  COMPILE/loader-$(1).uImage := append-loader-okli $(1) | pad-to 64k | lzma | \
-	uImage lzma
-  KERNEL := kernel-bin | append-dtb | lzma | uImage lzma -M 0x4f4b4c49
-  IMAGES += factory.bin
-  IMAGE/factory.bin := $$(IMAGE/sysupgrade.bin) | \
-	edimax-headers $(1) F9J1108v1 BR-6679BAC | check-size
+  EDIMAX_HEADER_MAGIC := F9J1108v1
+  EDIMAX_HEADER_MODEL := BR-6679BAC
 endef
 TARGET_DEVICES += belkin_f9j1108-v2
+
+define Device/belkin_f9k1115v2
+  $(Device/edimax-headers)
+  SOC := qca9558
+  DEVICE_VENDOR := Belkin
+  DEVICE_MODEL := F9K1115V2 (AC1750 DB Wi-Fi)
+  IMAGE_SIZE := 14464k
+  DEVICE_PACKAGES += ath10k-firmware-qca988x-ct kmod-usb2 kmod-usb3 kmod-usb-ledtrig-usbport
+  EDIMAX_HEADER_MAGIC := eDiMaX
+  EDIMAX_HEADER_MODEL := F9K1115V2
+endef
+TARGET_DEVICES += belkin_f9k1115v2
 
 define Device/buffalo_bhr-4grv
   $(Device/buffalo_common)

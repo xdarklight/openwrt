@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/dts-v1/;
+
+#include "qca9558_belkin_f9xyyy-v2.dtsi"
+
+/ {
+	compatible = "belkin,f9k1115v2", "qca,qca9558";
+	model = "Belkin AC 1750 DB (F9K1115V2)";
+
+	gpio-export {
+		compatible = "gpio-export";
+		#size-cells = <0>;
+
+		gpio_usb_power {
+			gpio-export,name = "f9k1115v2:usb2:power";
+			gpio-export,output = <1>;
+			gpios = <&gpio 21 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&gpio_leds {
+	status-amber {
+		label = "amber:status";
+		gpios = <&gpio 15 GPIO_ACTIVE_LOW>;
+	};
+
+	wps-amber {
+		label = "amber:wps";
+		gpios = <&gpio 14 GPIO_ACTIVE_LOW>;
+	};
+};
