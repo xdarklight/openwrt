@@ -1683,3 +1683,18 @@ endef
 
 $(eval $(call KernelPackage,chaoskey))
 
+define KernelPackage/ej1x8-gpio
+  SUBMENU:=$(USB_MENU)
+  TITLE:=Etron EJ168/EJ188/EJ198 GPIO support
+  DEPENDS:=@PCI_SUPPORT
+  KCONFIG:=CONFIG_GPIO_EJ1X8
+  FILES:=$(LINUX_DIR)/drivers/gpio/gpio-ej1x8.ko
+  AUTOLOAD:=$(call AutoProbe,gpio-ej1x8)
+  $(call AddDepends/usb)
+endef
+
+define KernelPackage/ej1x8-gpio/description
+  Kernel module for GPIO support on Etron EJ168/EJ188/EJ198 USB xHCI controllers
+endef
+
+$(eval $(call KernelPackage,ej1x8-gpio))

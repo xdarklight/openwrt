@@ -397,7 +397,7 @@ define Device/belkin_f9j1108-v2
   DEVICE_VENDOR := Belkin
   DEVICE_MODEL := F9J1108 v2 (AC1750 DB Wi-Fi)
   IMAGE_SIZE := 14464k
-  DEVICE_PACKAGES += ath10k-firmware-qca988x-ct kmod-usb2 kmod-usb3 kmod-usb-ledtrig-usbport
+  DEVICE_PACKAGES += ath10k-firmware-qca988x-ct kmod-usb2 kmod-usb3 kmod-usb-ledtrig-usbport kmod-ej1x8-gpio
   EDIMAX_HEADER_MAGIC := F9J1108v1
   EDIMAX_HEADER_MODEL := BR-6679BAC
 endef
@@ -409,7 +409,7 @@ define Device/belkin_f9k1115v2
   DEVICE_VENDOR := Belkin
   DEVICE_MODEL := F9K1115V2 (AC1750 DB Wi-Fi)
   IMAGE_SIZE := 14464k
-  DEVICE_PACKAGES += ath10k-firmware-qca988x-ct kmod-usb2 kmod-usb3 kmod-usb-ledtrig-usbport
+  DEVICE_PACKAGES += ath10k-firmware-qca988x-ct kmod-usb2 kmod-usb3 kmod-usb-ledtrig-usbport kmod-ej1x8-gpio 
   EDIMAX_HEADER_MAGIC := eDiMaX
   EDIMAX_HEADER_MODEL := F9K1115V2
 endef

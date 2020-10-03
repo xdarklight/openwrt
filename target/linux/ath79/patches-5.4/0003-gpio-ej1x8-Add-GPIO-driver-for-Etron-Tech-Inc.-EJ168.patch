@@ -1,0 +1,399 @@
+From 1f1f50cdf1ec3badc857ca6780196859f112cd84 Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Sat, 3 Oct 2020 21:41:04 +0200
+Subject: [PATCH 3/3] gpio: ej1x8: Add GPIO driver for Etron Tech Inc.
+ EJ168/EJ188/EJ198
+
+EJ168/EJ188/EJ198 are USB xHCI controllers. They also contain four GPIO
+lines which are used on some systems to toggle an LED based on whether a
+USB device is connected.
+
+There is no public datasheet available for this hardware. All
+information in this driver is taken from the
+"F9K1115v2.03.97-GPL-10.2.85-20140313" GPL code dump of the Belkin
+F9K1115v2. This board comes with an EJ168 USB xHCI controller and the
+USB 3.0 LED is connected to one of the GPIOs. Inside the GPL source
+archive the related code can be found in:
+  linux/kernels/mips-linux-2.6.31/drivers/usb/host/etxhci-pci.c
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ drivers/gpio/Kconfig      |  10 ++
+ drivers/gpio/Makefile     |   1 +
+ drivers/gpio/gpio-ej1x8.c | 331 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 342 insertions(+)
+ create mode 100644 drivers/gpio/gpio-ej1x8.c
+
+diff --git a/drivers/gpio/Kconfig b/drivers/gpio/Kconfig
+index 8030fd91a3cc..47f364573cb0 100644
+--- a/drivers/gpio/Kconfig
++++ b/drivers/gpio/Kconfig
+@@ -215,6 +215,16 @@ config GPIO_EIC_SPRD
+ 	help
+ 	  Say yes here to support Spreadtrum EIC device.
+ 
++config GPIO_EJ1X8
++	tristate "Etron Tech Inc. EJ168/EJ188/EJ198 GPIO driver"
++	depends on OF_GPIO && PCI
++	select GPIO_GENERIC
++	help
++	  Selecting this option will enable the GPIO pins present on
++	  the Etron Tech Inc. EJ168/EJ188/EJ198 USB xHCI controllers.
++
++	  If unsure, say N.
++
+ config GPIO_EM
+ 	tristate "Emma Mobile GPIO"
+ 	depends on (ARCH_EMEV2 || COMPILE_TEST) && OF_GPIO
+diff --git a/drivers/gpio/Makefile b/drivers/gpio/Makefile
+index 4f9abff4f2dc..6d5e345b1f2d 100644
+--- a/drivers/gpio/Makefile
++++ b/drivers/gpio/Makefile
+@@ -55,6 +55,7 @@ obj-$(CONFIG_GPIO_DAVINCI)		+= gpio-davinci.o
+ obj-$(CONFIG_GPIO_DLN2)			+= gpio-dln2.o
+ obj-$(CONFIG_GPIO_DWAPB)		+= gpio-dwapb.o
+ obj-$(CONFIG_GPIO_EIC_SPRD)		+= gpio-eic-sprd.o
++obj-$(CONFIG_GPIO_EJ1X8)		+= gpio-ej1x8.o
+ obj-$(CONFIG_GPIO_EM)			+= gpio-em.o
+ obj-$(CONFIG_GPIO_EP93XX)		+= gpio-ep93xx.o
+ obj-$(CONFIG_GPIO_EXAR)			+= gpio-exar.o
+diff --git a/drivers/gpio/gpio-ej1x8.c b/drivers/gpio/gpio-ej1x8.c
+new file mode 100644
+index 000000000000..2ae003a88021
+--- /dev/null
++++ b/drivers/gpio/gpio-ej1x8.c
+@@ -0,0 +1,331 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Copyright (C) 2020 Martin Blumenstingl <martin.blumenstingl@googlemail.com> */
++
++#include <linux/delay.h>
++#include <linux/gpio/driver.h>
++#include <linux/init.h>
++#include <linux/kernel.h>
++#include <linux/list.h>
++#include <linux/module.h>
++#include <linux/pci.h>
++#include <linux/pci_ids.h>
++#include <linux/platform_device.h>
++#include <linux/property.h>
++#include <linux/spinlock.h>
++#include <linux/slab.h>
++#include <linux/types.h>
++
++#define DRV_NAME				"ej1x8-gpio"
++
++#define EJ1X8_GPIO_INIT				0x44
++#define EJ1X8_GPIO_WRITE			0x68
++#define EJ1X8_GPIO_READ				0x6c
++
++#define EJ1X8_GPIO0_SHIFT			16
++#define EJ1X8_ALL_GPIO_MASK			0xff
++
++#define EJ1X8_GPIO_CTRL				0x18005020
++#define EJ1X8_GPIO_CTRL_OUT_LOW			0x0
++#define EJ1X8_GPIO_CTRL_OUT_HIGH		0x1
++#define EJ1X8_GPIO_CTRL_IN			0x2
++#define EJ1X8_GPIO_CTRL_MASK			0x3
++
++#define EJ1X8_GPIO_MODE				0x18005022
++#define EJ1X8_GPIO_MODE_DISABLE			0x0
++#define EJ1X8_GPIO_MODE_ENABLE			0x1
++#define EJ1X8_GPIO_MODE_MASK			0x3
++
++static LIST_HEAD(ej1x8_gpios);
++
++struct ej1x8_gpio {
++	spinlock_t			lock;
++	struct pci_dev			*pci_dev;
++	struct platform_device		*pdev;
++	struct gpio_chip		chip;
++	struct list_head		list_head;
++};
++
++static u32 ej1x8_gpio_shift(unsigned gpio, u8 mask)
++{
++	return (gpio * fls(mask)) + EJ1X8_GPIO0_SHIFT;
++}
++
++static u32 ej1x8_gpio_mask(unsigned gpio, u8 mask)
++{
++	return mask << ej1x8_gpio_shift(gpio, mask);
++}
++
++static int ej1x8_gpio_read(struct gpio_chip *gc, u32 reg, u32 *value)
++{
++	struct ej1x8_gpio *ej1x8 = gpiochip_get_data(gc);
++	int err;
++
++	err = pci_write_config_dword(ej1x8->pci_dev, EJ1X8_GPIO_WRITE, reg);
++	if (err) {
++		dev_err(gc->parent, "Failed to select 0x%08x register\n", reg);
++		return err;
++	}
++
++	usleep_range(1000, 10000);
++
++	err = pci_read_config_dword(ej1x8->pci_dev, EJ1X8_GPIO_READ, value);
++	if (err) {
++		dev_err(gc->parent, "Failed to read 0x%08x register\n", reg);
++		return err;
++	}
++
++	return 0;
++}
++
++static int ej1x8_gpio_write(struct gpio_chip *gc, u32 reg, u32 value)
++{
++	struct ej1x8_gpio *ej1x8 = gpiochip_get_data(gc);
++	int err;
++
++	err = pci_write_config_dword(ej1x8->pci_dev, EJ1X8_GPIO_WRITE, reg | value | BIT(24));
++	if (err) {
++		dev_err(gc->parent, "Failed to write 0x%08x register\n", reg);
++		return err;
++	}
++
++	usleep_range(1000, 10000);
++
++	return 0;
++}
++
++static int ej1x8_gpio_config(struct gpio_chip *gc, unsigned gpio, u8 mode, u8 ctrl)
++{
++	struct ej1x8_gpio *ej1x8 = gpiochip_get_data(gc);
++	u32 temp, gpio_ctrl, gpio_mode;
++	int err;
++
++	spin_lock(&ej1x8->lock);
++
++	err = pci_read_config_dword(ej1x8->pci_dev, EJ1X8_GPIO_INIT, &temp);
++	if (err) {
++		dev_err(gc->parent, "Failed to read INIT register\n");
++		return err;
++	}
++
++	err = pci_write_config_dword(ej1x8->pci_dev, EJ1X8_GPIO_INIT, temp | 0x1);
++	if (err) {
++		dev_err(gc->parent, "Failed to write INIT register\n");
++		return err;
++	}
++
++	err = ej1x8_gpio_read(gc, EJ1X8_GPIO_CTRL, &temp);
++	if (err)
++		goto err_unlock;
++
++	gpio_ctrl = (temp & EJ1X8_ALL_GPIO_MASK) << EJ1X8_GPIO0_SHIFT;
++	gpio_ctrl &= ~ej1x8_gpio_mask(gpio, EJ1X8_GPIO_CTRL_MASK);
++	gpio_ctrl |= ctrl << ej1x8_gpio_shift(gpio, EJ1X8_GPIO_CTRL_MASK);
++
++	err = ej1x8_gpio_read(gc, EJ1X8_GPIO_MODE, &temp);
++	if (err)
++		goto err_unlock;
++
++	gpio_mode = temp & (EJ1X8_ALL_GPIO_MASK << EJ1X8_GPIO0_SHIFT);
++	gpio_mode &= ~ej1x8_gpio_mask(gpio, EJ1X8_GPIO_MODE_MASK);
++	gpio_mode |= mode << ej1x8_gpio_shift(gpio, EJ1X8_GPIO_MODE_MASK);
++
++	err = ej1x8_gpio_write(gc, EJ1X8_GPIO_CTRL, gpio_ctrl);
++	if (err)
++		goto err_unlock;
++
++	err = ej1x8_gpio_write(gc, EJ1X8_GPIO_MODE, gpio_mode);
++	if (err)
++		goto err_unlock;
++
++	spin_unlock(&ej1x8->lock);
++
++	return 0;
++
++err_unlock:
++	spin_unlock(&ej1x8->lock);
++	return err;
++}
++
++static int ej1x8_gpio_get_mode(struct gpio_chip *gc, unsigned gpio, u8 *mode)
++{
++	struct ej1x8_gpio *ej1x8 = gpiochip_get_data(gc);
++	u32 temp, gpio_mode;
++	int err;
++
++	spin_lock(&ej1x8->lock);
++	err = ej1x8_gpio_read(gc, EJ1X8_GPIO_MODE, &temp);
++	spin_unlock(&ej1x8->lock);
++
++	if (err)
++		return err;
++
++	gpio_mode = temp & (EJ1X8_ALL_GPIO_MASK << EJ1X8_GPIO0_SHIFT);
++	*mode = gpio_mode >> ej1x8_gpio_shift(gpio, EJ1X8_GPIO_MODE_MASK);
++	*mode &= EJ1X8_GPIO_MODE_MASK;
++
++	return 0;
++}
++
++static void ej1x8_gpio_free(struct gpio_chip *gc, unsigned int gpio)
++{
++	ej1x8_gpio_config(gc, gpio, EJ1X8_GPIO_MODE_DISABLE, EJ1X8_GPIO_CTRL_IN);
++}
++
++static int ej1x8_gpio_get_direction(struct gpio_chip *gc, unsigned int gpio)
++{
++	u8 mode;
++	int err;
++
++	err = ej1x8_gpio_get_mode(gc, gpio, &mode);
++	if (err)
++		return err;
++
++	switch (mode) {
++	case EJ1X8_GPIO_CTRL_IN:
++		return 1;
++
++	case EJ1X8_GPIO_CTRL_OUT_HIGH:
++	case EJ1X8_GPIO_CTRL_OUT_LOW:
++		return 0;
++
++	default:
++		return -EINVAL;
++	}
++}
++
++static int ej1x8_gpio_direction_output(struct gpio_chip *gc, unsigned gpio, int value)
++{
++	u8 gpio_ctrl;
++
++	if (value)
++		gpio_ctrl = EJ1X8_GPIO_CTRL_OUT_HIGH;
++	else
++		gpio_ctrl = EJ1X8_GPIO_CTRL_OUT_LOW;
++
++	return ej1x8_gpio_config(gc, gpio, EJ1X8_GPIO_MODE_ENABLE, gpio_ctrl);
++}
++
++static int ej1x8_gpio_get_value(struct gpio_chip *gc, unsigned gpio)
++{
++	u8 mode;
++	int err;
++
++	err = ej1x8_gpio_get_mode(gc, gpio, &mode);
++	if (err)
++		return err;
++
++	switch (mode) {
++	case EJ1X8_GPIO_CTRL_OUT_HIGH:
++		return 1;
++
++	case EJ1X8_GPIO_CTRL_OUT_LOW:
++		return 0;
++
++	default:
++		return -EINVAL;
++	}
++}
++
++static void ej1x8_gpio_set_value(struct gpio_chip *gc, unsigned gpio, int value)
++{
++	ej1x8_gpio_direction_output(gc, gpio, value);
++}
++
++static int ej1x8_gpio_probe(struct platform_device *pdev)
++{
++	struct ej1x8_gpio *ej1x8;
++
++	ej1x8 = dev_get_platdata(&pdev->dev);
++	if (!ej1x8) {
++		dev_err(&pdev->dev, "Platform data is not supplied\n");
++		return -ENODEV;
++	}
++
++	/* TODO: input mode is supported by the hardware but not the driver */
++	ej1x8->chip.label = dev_name(&pdev->dev);
++	ej1x8->chip.owner = THIS_MODULE;
++	ej1x8->chip.parent = &pdev->dev;
++	ej1x8->chip.of_node = ej1x8->pci_dev->dev.of_node;
++	ej1x8->chip.free = ej1x8_gpio_free;
++	ej1x8->chip.get_direction = ej1x8_gpio_get_direction;
++	ej1x8->chip.direction_output = ej1x8_gpio_direction_output;
++	ej1x8->chip.get = ej1x8_gpio_get_value;
++	ej1x8->chip.set = ej1x8_gpio_set_value;
++	ej1x8->chip.base = -1;
++	ej1x8->chip.ngpio = 4;
++
++	return devm_gpiochip_add_data(&pdev->dev, &ej1x8->chip, ej1x8);
++}
++
++static struct platform_driver ej1x8_gpio_driver = {
++	.driver.name	= DRV_NAME,
++	.probe		= ej1x8_gpio_probe,
++};
++
++static const struct pci_device_id ej1x8_gpio_pci_ids[] __initconst = {
++	{ PCI_DEVICE(PCI_VENDOR_ID_ETRON, PCI_DEVICE_ID_ETRON_EJ168) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_ETRON, PCI_DEVICE_ID_ETRON_EJ188) },
++	{ /* sentinel */ }
++};
++
++static int __init ej1x8_gpio_init(void)
++{
++	struct pci_dev *pci_dev = NULL;
++	struct ej1x8_gpio *ej1x8;
++	int err;
++
++	err = platform_driver_register(&ej1x8_gpio_driver);
++	if (err)
++		return err;
++
++	while ((pci_dev = pci_get_device(PCI_VENDOR_ID_ETRON, PCI_ANY_ID, pci_dev)) != NULL) {
++		if (!pci_match_id(ej1x8_gpio_pci_ids, pci_dev))
++			continue;
++
++		if (!device_property_read_bool(&pci_dev->dev, "gpio-controller"))
++			continue;
++
++		ej1x8 = kzalloc(sizeof(*ej1x8), GFP_KERNEL);
++		if (!ej1x8)
++			continue;
++
++		spin_lock_init(&ej1x8->lock);
++		ej1x8->pci_dev = pci_dev_get(pci_dev);
++
++		ej1x8->pdev = platform_device_register_data(&pci_dev->dev, DRV_NAME,
++							    PLATFORM_DEVID_AUTO,
++							    ej1x8, sizeof(*ej1x8));
++		if (IS_ERR(ej1x8->pdev)) {
++			dev_warn(&pci_dev->dev, "Failed to register GPIO device\n");
++			pci_dev_put(ej1x8->pci_dev);
++			kfree(ej1x8);
++			continue;
++		}
++
++		list_add(&ej1x8->list_head, &ej1x8_gpios);
++	}
++
++	return 0;
++}
++
++static void __exit ej1x8_gpio_exit(void)
++{
++	struct ej1x8_gpio *ej1x8, *tmp;
++
++	platform_driver_unregister(&ej1x8_gpio_driver);
++
++	list_for_each_entry_safe (ej1x8, tmp, &ej1x8_gpios, list_head) {
++		platform_device_del(ej1x8->pdev);
++		platform_device_put(ej1x8->pdev);
++		pci_dev_put(ej1x8->pci_dev);
++		list_del(&ej1x8->list_head);
++		kfree(ej1x8);
++	}
++}
++
++module_init(ej1x8_gpio_init);
++module_exit(ej1x8_gpio_exit);
++
++MODULE_AUTHOR("Martin Blumenstingl <martin.blumenstingl@googlemail.com>");
++MODULE_DESCRIPTION("Etron Technology Inc. EJ168/EJ188/EJ198 GPIO driver");
++MODULE_LICENSE("GPL v2");
+-- 
+2.28.0
+
