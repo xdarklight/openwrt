@@ -1,0 +1,624 @@
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 61bc320..ef1c77a 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -654,10 +654,8 @@ static const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
+ 	[NL80211_ATTR_RECEIVE_MULTICAST] = { .type = NLA_FLAG },
+ 	[NL80211_ATTR_WIPHY_FREQ_OFFSET] = NLA_POLICY_RANGE(NLA_U32, 0, 999),
+ 	[NL80211_ATTR_SCAN_FREQ_KHZ] = { .type = NLA_NESTED },
+-	[NL80211_ATTR_HE_6GHZ_CAPABILITY] = {
+-		.type = NLA_EXACT_LEN,
+-		.len = sizeof(struct ieee80211_he_6ghz_capa),
+-	},
++	[NL80211_ATTR_HE_6GHZ_CAPABILITY] =
++		NLA_POLICY_EXACT_LEN(sizeof(struct ieee80211_he_6ghz_capa)),
+ 	[NL80211_ATTR_WIPHY_ANTENNA_GAIN] = { .type = NLA_U32 },
+ };
+ 
+diff --git a/drivers/net/wireless/intel/iwlwifi/pcie/rx.c b/drivers/net/wireless/intel/iwlwifi/pcie/rx.c
+index 2ed31b6..5764c44 100644
+--- a/drivers/net/wireless/intel/iwlwifi/pcie/rx.c
++++ b/drivers/net/wireless/intel/iwlwifi/pcie/rx.c
+@@ -1369,7 +1369,7 @@ static void iwl_pcie_rx_handle_rb(struct iwl_trans *trans,
+ 					   &rxcb, rxq->id);
+ 
+ 		if (reclaim) {
+-			kzfree(txq->entries[cmd_index].free_buf);
++			kfree_sensitive(txq->entries[cmd_index].free_buf);
+ 			txq->entries[cmd_index].free_buf = NULL;
+ 		}
+ 
+diff --git a/drivers/net/wireless/intel/iwlwifi/pcie/tx-gen2.c b/drivers/net/wireless/intel/iwlwifi/pcie/tx-gen2.c
+index 7fc7542..606bef2 100644
+--- a/drivers/net/wireless/intel/iwlwifi/pcie/tx-gen2.c
++++ b/drivers/net/wireless/intel/iwlwifi/pcie/tx-gen2.c
+@@ -1026,7 +1026,7 @@ static int iwl_pcie_gen2_enqueue_hcmd(struct iwl_trans *trans,
+ 	BUILD_BUG_ON(IWL_TFH_NUM_TBS > sizeof(out_meta->tbs) * BITS_PER_BYTE);
+ 	out_meta->flags = cmd->flags;
+ 	if (WARN_ON_ONCE(txq->entries[idx].free_buf))
+-		kzfree(txq->entries[idx].free_buf);
++		kfree_sensitive(txq->entries[idx].free_buf);
+ 	txq->entries[idx].free_buf = dup_buf;
+ 
+ 	trace_iwlwifi_dev_hcmd(trans->dev, cmd, cmd_size, &out_cmd->hdr_wide);
+@@ -1257,8 +1257,8 @@ static void iwl_pcie_gen2_txq_free(struct iwl_trans *trans, int txq_id)
+ 	/* De-alloc array of command/tx buffers */
+ 	if (txq_id == trans->txqs.cmd.q_id)
+ 		for (i = 0; i < txq->n_window; i++) {
+-			kzfree(txq->entries[i].cmd);
+-			kzfree(txq->entries[i].free_buf);
++			kfree_sensitive(txq->entries[i].cmd);
++			kfree_sensitive(txq->entries[i].free_buf);
+ 		}
+ 	del_timer_sync(&txq->stuck_timer);
+ 
+diff --git a/drivers/net/wireless/intel/iwlwifi/pcie/tx.c b/drivers/net/wireless/intel/iwlwifi/pcie/tx.c
+index 5c6c3fa..eb396c0 100644
+--- a/drivers/net/wireless/intel/iwlwifi/pcie/tx.c
++++ b/drivers/net/wireless/intel/iwlwifi/pcie/tx.c
+@@ -721,8 +721,8 @@ static void iwl_pcie_txq_free(struct iwl_trans *trans, int txq_id)
+ 	/* De-alloc array of command/tx buffers */
+ 	if (txq_id == trans->txqs.cmd.q_id)
+ 		for (i = 0; i < txq->n_window; i++) {
+-			kzfree(txq->entries[i].cmd);
+-			kzfree(txq->entries[i].free_buf);
++			kfree_sensitive(txq->entries[i].cmd);
++			kfree_sensitive(txq->entries[i].free_buf);
+ 		}
+ 
+ 	/* De-alloc circular buffer of TFDs */
+@@ -1765,7 +1765,7 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
+ 	BUILD_BUG_ON(IWL_TFH_NUM_TBS > sizeof(out_meta->tbs) * BITS_PER_BYTE);
+ 	out_meta->flags = cmd->flags;
+ 	if (WARN_ON_ONCE(txq->entries[idx].free_buf))
+-		kzfree(txq->entries[idx].free_buf);
++		kfree_sensitive(txq->entries[idx].free_buf);
+ 	txq->entries[idx].free_buf = dup_buf;
+ 
+ 	trace_iwlwifi_dev_hcmd(trans->dev, cmd, cmd_size, &out_cmd->hdr_wide);
+diff --git a/drivers/net/wireless/intersil/orinoco/wext.c b/drivers/net/wireless/intersil/orinoco/wext.c
+index 1d4dae4..7b6c4ae 100644
+--- a/drivers/net/wireless/intersil/orinoco/wext.c
++++ b/drivers/net/wireless/intersil/orinoco/wext.c
+@@ -31,8 +31,8 @@ static int orinoco_set_key(struct orinoco_private *priv, int index,
+ 			   enum orinoco_alg alg, const u8 *key, int key_len,
+ 			   const u8 *seq, int seq_len)
+ {
+-	kzfree(priv->keys[index].key);
+-	kzfree(priv->keys[index].seq);
++	kfree_sensitive(priv->keys[index].key);
++	kfree_sensitive(priv->keys[index].seq);
+ 
+ 	if (key_len) {
+ 		priv->keys[index].key = kzalloc(key_len, GFP_ATOMIC);
+diff --git a/drivers/staging/rtl8723bs/core/rtw_security.c b/drivers/staging/rtl8723bs/core/rtw_security.c
+index 0f95009..ec91220 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_security.c
++++ b/drivers/staging/rtl8723bs/core/rtw_security.c
+@@ -2251,7 +2251,7 @@ static void gf_mulx(u8 *pad)
+ 
+ static void aes_encrypt_deinit(void *ctx)
+ {
+-	kzfree(ctx);
++	kfree_sensitive(ctx);
+ }
+ 
+ 
+diff --git a/net/mac80211/aes_gcm.c b/net/mac80211/aes_gcm.c
+index 8a4397c..899b4be 100644
+--- a/net/mac80211/aes_gcm.c
++++ b/net/mac80211/aes_gcm.c
+@@ -40,7 +40,7 @@ int ieee80211_aes_gcm_encrypt(struct crypto_aead *tfm, u8 *j_0, u8 *aad,
+ 	aead_request_set_ad(aead_req, sg[0].length);
+ 
+ 	crypto_aead_encrypt(aead_req);
+-	kzfree(aead_req);
++	kfree_sensitive(aead_req);
+ 	return 0;
+ }
+ 
+@@ -74,7 +74,7 @@ int ieee80211_aes_gcm_decrypt(struct crypto_aead *tfm, u8 *j_0, u8 *aad,
+ 	aead_request_set_ad(aead_req, sg[0].length);
+ 
+ 	err = crypto_aead_decrypt(aead_req);
+-	kzfree(aead_req);
++	kfree_sensitive(aead_req);
+ 
+ 	return err;
+ }
+diff --git a/net/mac80211/aes_gmac.c b/net/mac80211/aes_gmac.c
+index 16ba09c..6f3b3a0 100644
+--- a/net/mac80211/aes_gmac.c
++++ b/net/mac80211/aes_gmac.c
+@@ -60,7 +60,7 @@ int ieee80211_aes_gmac(struct crypto_aead *tfm, const u8 *aad, u8 *nonce,
+ 	aead_request_set_ad(aead_req, GMAC_AAD_LEN + data_len);
+ 
+ 	crypto_aead_encrypt(aead_req);
+-	kzfree(aead_req);
++	kfree_sensitive(aead_req);
+ 
+ 	return 0;
+ }
+diff --git a/net/mac80211/key.c b/net/mac80211/key.c
+index 3d896e6..8c5f829 100644
+--- a/net/mac80211/key.c
++++ b/net/mac80211/key.c
+@@ -717,7 +717,7 @@ static void ieee80211_key_free_common(struct ieee80211_key *key)
+ 		ieee80211_aes_gcm_key_free(key->u.gcmp.tfm);
+ 		break;
+ 	}
+-	kzfree(key);
++	kfree_sensitive(key);
+ }
+ 
+ static void __ieee80211_key_destroy(struct ieee80211_key *key,
+diff --git a/net/wireless/core.c b/net/wireless/core.c
+index acc323a..930632c 100644
+--- a/net/wireless/core.c
++++ b/net/wireless/core.c
+@@ -1116,7 +1116,7 @@ static void __cfg80211_unregister_wdev(struct wireless_dev *wdev, bool sync)
+ 	}
+ 
+ #ifdef CPTCFG_CFG80211_WEXT
+-	kzfree(wdev->wext.keys);
++	kfree_sensitive(wdev->wext.keys);
+ 	wdev->wext.keys = NULL;
+ #endif
+ 	/* only initialized if we have a netdev */
+diff --git a/net/wireless/ibss.c b/net/wireless/ibss.c
+index b3b79d4..8ea18f4 100644
+--- a/net/wireless/ibss.c
++++ b/net/wireless/ibss.c
+@@ -127,7 +127,7 @@ int __cfg80211_join_ibss(struct cfg80211_registered_device *rdev,
+ 		return -EINVAL;
+ 
+ 	if (WARN_ON(wdev->connect_keys))
+-		kzfree(wdev->connect_keys);
++		kfree_sensitive(wdev->connect_keys);
+ 	wdev->connect_keys = connkeys;
+ 
+ 	wdev->ibss_fixed = params->channel_fixed;
+@@ -161,7 +161,7 @@ static void __cfg80211_clear_ibss(struct net_device *dev, bool nowext)
+ 
+ 	ASSERT_WDEV_LOCK(wdev);
+ 
+-	kzfree(wdev->connect_keys);
++	kfree_sensitive(wdev->connect_keys);
+ 	wdev->connect_keys = NULL;
+ 
+ 	rdev_set_qos_map(rdev, dev, NULL);
+diff --git a/net/wireless/lib80211_crypt_tkip.c b/net/wireless/lib80211_crypt_tkip.c
+index fe0d744..7d57302 100644
+--- a/net/wireless/lib80211_crypt_tkip.c
++++ b/net/wireless/lib80211_crypt_tkip.c
+@@ -131,7 +131,7 @@ static void lib80211_tkip_deinit(void *priv)
+ 		crypto_free_shash(_priv->tx_tfm_michael);
+ 		crypto_free_shash(_priv->rx_tfm_michael);
+ 	}
+-	kzfree(priv);
++	kfree_sensitive(priv);
+ }
+ 
+ static inline u16 RotR1(u16 val)
+diff --git a/net/wireless/lib80211_crypt_wep.c b/net/wireless/lib80211_crypt_wep.c
+index dafc6f3..6ab9957 100644
+--- a/net/wireless/lib80211_crypt_wep.c
++++ b/net/wireless/lib80211_crypt_wep.c
+@@ -56,7 +56,7 @@ static void *lib80211_wep_init(int keyidx)
+ 
+ static void lib80211_wep_deinit(void *priv)
+ {
+-	kzfree(priv);
++	kfree_sensitive(priv);
+ }
+ 
+ /* Add WEP IV/key info to a frame that has at least 4 bytes of headroom */
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index ef1c77a..fac73d2 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -9856,7 +9856,7 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
+ 
+ 		if ((ibss.chandef.width != NL80211_CHAN_WIDTH_20_NOHT) &&
+ 		    no_ht) {
+-			kzfree(connkeys);
++			kfree_sensitive(connkeys);
+ 			return -EINVAL;
+ 		}
+ 	}
+@@ -9868,7 +9868,7 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
+ 		int r = validate_pae_over_nl80211(rdev, info);
+ 
+ 		if (r < 0) {
+-			kzfree(connkeys);
++			kfree_sensitive(connkeys);
+ 			return r;
+ 		}
+ 
+@@ -9881,7 +9881,7 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
+ 	wdev_lock(dev->ieee80211_ptr);
+ 	err = __cfg80211_join_ibss(rdev, dev, &ibss, connkeys);
+ 	if (err)
+-		kzfree(connkeys);
++		kfree_sensitive(connkeys);
+ 	else if (info->attrs[NL80211_ATTR_SOCKET_OWNER])
+ 		dev->ieee80211_ptr->conn_owner_nlportid = genl_info_snd_portid(info);
+ 	wdev_unlock(dev->ieee80211_ptr);
+@@ -10309,7 +10309,7 @@ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
+ 
+ 	if (info->attrs[NL80211_ATTR_HT_CAPABILITY]) {
+ 		if (!info->attrs[NL80211_ATTR_HT_CAPABILITY_MASK]) {
+-			kzfree(connkeys);
++			kfree_sensitive(connkeys);
+ 			return -EINVAL;
+ 		}
+ 		memcpy(&connect.ht_capa,
+@@ -10327,7 +10327,7 @@ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
+ 
+ 	if (info->attrs[NL80211_ATTR_VHT_CAPABILITY]) {
+ 		if (!info->attrs[NL80211_ATTR_VHT_CAPABILITY_MASK]) {
+-			kzfree(connkeys);
++			kfree_sensitive(connkeys);
+ 			return -EINVAL;
+ 		}
+ 		memcpy(&connect.vht_capa,
+@@ -10341,7 +10341,7 @@ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
+ 		       (rdev->wiphy.features & NL80211_FEATURE_QUIET)) &&
+ 		    !wiphy_ext_feature_isset(&rdev->wiphy,
+ 					     NL80211_EXT_FEATURE_RRM)) {
+-			kzfree(connkeys);
++			kfree_sensitive(connkeys);
+ 			return -EINVAL;
+ 		}
+ 		connect.flags |= ASSOC_REQ_USE_RRM;
+@@ -10349,21 +10349,21 @@ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
+ 
+ 	connect.pbss = nla_get_flag(info->attrs[NL80211_ATTR_PBSS]);
+ 	if (connect.pbss && !rdev->wiphy.bands[NL80211_BAND_60GHZ]) {
+-		kzfree(connkeys);
++		kfree_sensitive(connkeys);
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	if (info->attrs[NL80211_ATTR_BSS_SELECT]) {
+ 		/* bss selection makes no sense if bssid is set */
+ 		if (connect.bssid) {
+-			kzfree(connkeys);
++			kfree_sensitive(connkeys);
+ 			return -EINVAL;
+ 		}
+ 
+ 		err = parse_bss_select(info->attrs[NL80211_ATTR_BSS_SELECT],
+ 				       wiphy, &connect.bss_select);
+ 		if (err) {
+-			kzfree(connkeys);
++			kfree_sensitive(connkeys);
+ 			return err;
+ 		}
+ 	}
+@@ -10393,13 +10393,13 @@ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
+ 		   info->attrs[NL80211_ATTR_FILS_ERP_REALM] ||
+ 		   info->attrs[NL80211_ATTR_FILS_ERP_NEXT_SEQ_NUM] ||
+ 		   info->attrs[NL80211_ATTR_FILS_ERP_RRK]) {
+-		kzfree(connkeys);
++		kfree_sensitive(connkeys);
+ 		return -EINVAL;
+ 	}
+ 
+ 	if (nla_get_flag(info->attrs[NL80211_ATTR_EXTERNAL_AUTH_SUPPORT])) {
+ 		if (!info->attrs[NL80211_ATTR_SOCKET_OWNER]) {
+-			kzfree(connkeys);
++			kfree_sensitive(connkeys);
+ 			GENL_SET_ERR_MSG(info,
+ 					 "external auth requires connection ownership");
+ 			return -EINVAL;
+@@ -10412,7 +10412,7 @@ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
+ 	err = cfg80211_connect(rdev, dev, &connect, connkeys,
+ 			       connect.prev_bssid);
+ 	if (err)
+-		kzfree(connkeys);
++		kfree_sensitive(connkeys);
+ 
+ 	if (!err && info->attrs[NL80211_ATTR_SOCKET_OWNER]) {
+ 		dev->ieee80211_ptr->conn_owner_nlportid = genl_info_snd_portid(info);
+diff --git a/net/wireless/sme.c b/net/wireless/sme.c
+index 97fe45c..f7333d0 100644
+--- a/net/wireless/sme.c
++++ b/net/wireless/sme.c
+@@ -742,7 +742,7 @@ void __cfg80211_connect_result(struct net_device *dev,
+ 	}
+ 
+ 	if (cr->status != WLAN_STATUS_SUCCESS) {
+-		kzfree(wdev->connect_keys);
++		kfree_sensitive(wdev->connect_keys);
+ 		wdev->connect_keys = NULL;
+ 		wdev->ssid_len = 0;
+ 		wdev->conn_owner_nlportid = 0;
+@@ -1098,7 +1098,7 @@ void __cfg80211_disconnected(struct net_device *dev, const u8 *ie,
+ 	wdev->current_bss = NULL;
+ 	wdev->ssid_len = 0;
+ 	wdev->conn_owner_nlportid = 0;
+-	kzfree(wdev->connect_keys);
++	kfree_sensitive(wdev->connect_keys);
+ 	wdev->connect_keys = NULL;
+ 
+ 	nl80211_send_disconnected(rdev, dev, reason, ie, ie_len, from_ap);
+@@ -1281,7 +1281,7 @@ int cfg80211_disconnect(struct cfg80211_registered_device *rdev,
+ 
+ 	ASSERT_WDEV_LOCK(wdev);
+ 
+-	kzfree(wdev->connect_keys);
++	kfree_sensitive(wdev->connect_keys);
+ 	wdev->connect_keys = NULL;
+ 
+ 	wdev->conn_owner_nlportid = 0;
+diff --git a/net/wireless/util.c b/net/wireless/util.c
+index 2ff5fd3..f53f1d6 100644
+--- a/net/wireless/util.c
++++ b/net/wireless/util.c
+@@ -869,7 +869,7 @@ void cfg80211_upload_connect_keys(struct wireless_dev *wdev)
+ 		}
+ 	}
+ 
+-	kzfree(wdev->connect_keys);
++	kfree_sensitive(wdev->connect_keys);
+ 	wdev->connect_keys = NULL;
+ }
+ 
+diff --git a/net/wireless/wext-sme.c b/net/wireless/wext-sme.c
+index 73fd0ea..73df235 100644
+--- a/net/wireless/wext-sme.c
++++ b/net/wireless/wext-sme.c
+@@ -57,7 +57,7 @@ int cfg80211_mgd_wext_connect(struct cfg80211_registered_device *rdev,
+ 	err = cfg80211_connect(rdev, wdev->netdev,
+ 			       &wdev->wext.connect, ck, prev_bssid);
+ 	if (err)
+-		kzfree(ck);
++		kfree_sensitive(ck);
+ 
+ 	return err;
+ }
+diff --git a/drivers/net/wireless/ath/ath10k/core.c b/drivers/net/wireless/ath/ath10k/core.c
+index 4d39b1e..d8796e4 100644
+--- a/drivers/net/wireless/ath/ath10k/core.c
++++ b/drivers/net/wireless/ath/ath10k/core.c
+@@ -2246,7 +2246,7 @@ static int ath10k_init_uart(struct ath10k *ar)
+ 
+ static int ath10k_init_hw_params(struct ath10k *ar)
+ {
+-	const struct ath10k_hw_params *uninitialized_var(hw_params);
++	const struct ath10k_hw_params *hw_params;
+ 	int i;
+ 
+ 	for (i = 0; i < ARRAY_SIZE(ath10k_hw_params_list); i++) {
+diff --git a/drivers/net/wireless/ath/ath6kl/init.c b/drivers/net/wireless/ath/ath6kl/init.c
+index aa1c71a..811fad6 100644
+--- a/drivers/net/wireless/ath/ath6kl/init.c
++++ b/drivers/net/wireless/ath/ath6kl/init.c
+@@ -1575,7 +1575,7 @@ static int ath6kl_init_upload(struct ath6kl *ar)
+ 
+ int ath6kl_init_hw_params(struct ath6kl *ar)
+ {
+-	const struct ath6kl_hw *uninitialized_var(hw);
++	const struct ath6kl_hw *hw;
+ 	int i;
+ 
+ 	for (i = 0; i < ARRAY_SIZE(hw_list); i++) {
+diff --git a/drivers/net/wireless/ath/ath9k/init.c b/drivers/net/wireless/ath/ath9k/init.c
+index d5919a0..dfe6b83 100644
+--- a/drivers/net/wireless/ath/ath9k/init.c
++++ b/drivers/net/wireless/ath/ath9k/init.c
+@@ -230,7 +230,7 @@ static unsigned int ath9k_reg_rmw(void *hw_priv, u32 reg_offset, u32 set, u32 cl
+ 	struct ath_hw *ah = hw_priv;
+ 	struct ath_common *common = ath9k_hw_common(ah);
+ 	struct ath_softc *sc = (struct ath_softc *) common->priv;
+-	unsigned long uninitialized_var(flags);
++	unsigned long flags;
+ 	u32 val;
+ 
+ 	if (NR_CPUS > 1 && ah->config.serialize_regmode == SER_REG_MODE_ON) {
+diff --git a/drivers/net/wireless/broadcom/b43/debugfs.c b/drivers/net/wireless/broadcom/b43/debugfs.c
+index dc1819c..89a25ae 100644
+--- a/drivers/net/wireless/broadcom/b43/debugfs.c
++++ b/drivers/net/wireless/broadcom/b43/debugfs.c
+@@ -493,7 +493,7 @@ static ssize_t b43_debugfs_read(struct file *file, char __user *userbuf,
+ 	struct b43_wldev *dev;
+ 	struct b43_debugfs_fops *dfops;
+ 	struct b43_dfs_file *dfile;
+-	ssize_t uninitialized_var(ret);
++	ssize_t ret;
+ 	char *buf;
+ 	const size_t bufsize = 1024 * 16; /* 16 kiB buffer */
+ 	const size_t buforder = get_order(bufsize);
+diff --git a/drivers/net/wireless/broadcom/b43/dma.c b/drivers/net/wireless/broadcom/b43/dma.c
+index 1bd258d..dad5362 100644
+--- a/drivers/net/wireless/broadcom/b43/dma.c
++++ b/drivers/net/wireless/broadcom/b43/dma.c
+@@ -37,7 +37,7 @@
+ static u32 b43_dma_address(struct b43_dma *dma, dma_addr_t dmaaddr,
+ 			   enum b43_addrtype addrtype)
+ {
+-	u32 uninitialized_var(addr);
++	u32 addr;
+ 
+ 	switch (addrtype) {
+ 	case B43_DMA_ADDR_LOW:
+diff --git a/drivers/net/wireless/broadcom/b43/lo.c b/drivers/net/wireless/broadcom/b43/lo.c
+index 5d97cf0..338b654 100644
+--- a/drivers/net/wireless/broadcom/b43/lo.c
++++ b/drivers/net/wireless/broadcom/b43/lo.c
+@@ -729,7 +729,7 @@ struct b43_lo_calib *b43_calibrate_lo_setting(struct b43_wldev *dev,
+ 	};
+ 	int max_rx_gain;
+ 	struct b43_lo_calib *cal;
+-	struct lo_g_saved_values uninitialized_var(saved_regs);
++	struct lo_g_saved_values saved_regs;
+ 	/* Values from the "TXCTL Register and Value Table" */
+ 	u16 txctl_reg;
+ 	u16 txctl_value;
+diff --git a/drivers/net/wireless/broadcom/b43/phy_n.c b/drivers/net/wireless/broadcom/b43/phy_n.c
+index 0e8c313..9d1fc06 100644
+--- a/drivers/net/wireless/broadcom/b43/phy_n.c
++++ b/drivers/net/wireless/broadcom/b43/phy_n.c
+@@ -4222,7 +4222,7 @@ static void b43_nphy_tx_gain_table_upload(struct b43_wldev *dev)
+ 	u32 rfpwr_offset;
+ 	u8 pga_gain, pad_gain;
+ 	int i;
+-	const s16 *uninitialized_var(rf_pwr_offset_table);
++	const s16 *rf_pwr_offset_table;
+ 
+ 	table = b43_nphy_get_tx_gain_table(dev);
+ 	if (!table)
+@@ -5643,7 +5643,7 @@ static int b43_nphy_rev2_cal_rx_iq(struct b43_wldev *dev,
+ 	u8 rfctl[2];
+ 	u8 afectl_core;
+ 	u16 tmp[6];
+-	u16 uninitialized_var(cur_hpf1), uninitialized_var(cur_hpf2), cur_lna;
++	u16 cur_hpf1, cur_hpf2, cur_lna;
+ 	u32 real, imag;
+ 	enum nl80211_band band;
+ 
+diff --git a/drivers/net/wireless/broadcom/b43/xmit.c b/drivers/net/wireless/broadcom/b43/xmit.c
+index 55babc6..7651b1b 100644
+--- a/drivers/net/wireless/broadcom/b43/xmit.c
++++ b/drivers/net/wireless/broadcom/b43/xmit.c
+@@ -422,10 +422,10 @@ int b43_generate_txhdr(struct b43_wldev *dev,
+ 	if ((rates[0].flags & IEEE80211_TX_RC_USE_RTS_CTS) ||
+ 	    (rates[0].flags & IEEE80211_TX_RC_USE_CTS_PROTECT)) {
+ 		unsigned int len;
+-		struct ieee80211_hdr *uninitialized_var(hdr);
++		struct ieee80211_hdr *hdr;
+ 		int rts_rate, rts_rate_fb;
+ 		int rts_rate_ofdm, rts_rate_fb_ofdm;
+-		struct b43_plcp_hdr6 *uninitialized_var(plcp);
++		struct b43_plcp_hdr6 *plcp;
+ 		struct ieee80211_rate *rts_cts_rate;
+ 
+ 		rts_cts_rate = ieee80211_get_rts_cts_rate(dev->wl->hw, info);
+@@ -436,7 +436,7 @@ int b43_generate_txhdr(struct b43_wldev *dev,
+ 		rts_rate_fb_ofdm = b43_is_ofdm_rate(rts_rate_fb);
+ 
+ 		if (rates[0].flags & IEEE80211_TX_RC_USE_CTS_PROTECT) {
+-			struct ieee80211_cts *uninitialized_var(cts);
++			struct ieee80211_cts *cts;
+ 
+ 			switch (dev->fw.hdr_format) {
+ 			case B43_FW_HDR_598:
+@@ -458,7 +458,7 @@ int b43_generate_txhdr(struct b43_wldev *dev,
+ 			mac_ctl |= B43_TXH_MAC_SENDCTS;
+ 			len = sizeof(struct ieee80211_cts);
+ 		} else {
+-			struct ieee80211_rts *uninitialized_var(rts);
++			struct ieee80211_rts *rts;
+ 
+ 			switch (dev->fw.hdr_format) {
+ 			case B43_FW_HDR_598:
+@@ -637,8 +637,8 @@ void b43_rx(struct b43_wldev *dev, struct sk_buff *skb, const void *_rxhdr)
+ 	const struct b43_rxhdr_fw4 *rxhdr = _rxhdr;
+ 	__le16 fctl;
+ 	u16 phystat0, phystat3;
+-	u16 uninitialized_var(chanstat), uninitialized_var(mactime);
+-	u32 uninitialized_var(macstat);
++	u16 chanstat, mactime;
++	u32 macstat;
+ 	u16 chanid;
+ 	int padding, rate_idx;
+ 
+diff --git a/drivers/net/wireless/broadcom/b43legacy/debugfs.c b/drivers/net/wireless/broadcom/b43legacy/debugfs.c
+index fa133df..e7e4293 100644
+--- a/drivers/net/wireless/broadcom/b43legacy/debugfs.c
++++ b/drivers/net/wireless/broadcom/b43legacy/debugfs.c
+@@ -190,7 +190,7 @@ static ssize_t b43legacy_debugfs_read(struct file *file, char __user *userbuf,
+ 	struct b43legacy_wldev *dev;
+ 	struct b43legacy_debugfs_fops *dfops;
+ 	struct b43legacy_dfs_file *dfile;
+-	ssize_t uninitialized_var(ret);
++	ssize_t ret;
+ 	char *buf;
+ 	const size_t bufsize = 1024 * 16; /* 16 KiB buffer */
+ 	const size_t buforder = get_order(bufsize);
+diff --git a/drivers/net/wireless/broadcom/b43legacy/main.c b/drivers/net/wireless/broadcom/b43legacy/main.c
+index 64031a5..1cd1e11 100644
+--- a/drivers/net/wireless/broadcom/b43legacy/main.c
++++ b/drivers/net/wireless/broadcom/b43legacy/main.c
+@@ -2580,7 +2580,7 @@ static void b43legacy_put_phy_into_reset(struct b43legacy_wldev *dev)
+ static int b43legacy_switch_phymode(struct b43legacy_wl *wl,
+ 				      unsigned int new_mode)
+ {
+-	struct b43legacy_wldev *uninitialized_var(up_dev);
++	struct b43legacy_wldev *up_dev;
+ 	struct b43legacy_wldev *down_dev;
+ 	int err;
+ 	bool gmode = false;
+diff --git a/drivers/net/wireless/intel/iwlegacy/3945.c b/drivers/net/wireless/intel/iwlegacy/3945.c
+index d2b18b2..f642b0b 100644
+--- a/drivers/net/wireless/intel/iwlegacy/3945.c
++++ b/drivers/net/wireless/intel/iwlegacy/3945.c
+@@ -2100,7 +2100,7 @@ il3945_txpower_set_from_eeprom(struct il_priv *il)
+ 
+ 		/* set tx power value for all OFDM rates */
+ 		for (rate_idx = 0; rate_idx < IL_OFDM_RATES; rate_idx++) {
+-			s32 uninitialized_var(power_idx);
++			s32 power_idx;
+ 			int rc;
+ 
+ 			/* use channel group's clip-power table,
+diff --git a/drivers/net/wireless/intel/iwlegacy/4965-mac.c b/drivers/net/wireless/intel/iwlegacy/4965-mac.c
+index 3ef3d48..2d55665 100644
+--- a/drivers/net/wireless/intel/iwlegacy/4965-mac.c
++++ b/drivers/net/wireless/intel/iwlegacy/4965-mac.c
+@@ -2769,7 +2769,7 @@ il4965_hdl_tx(struct il_priv *il, struct il_rx_buf *rxb)
+ 	struct ieee80211_tx_info *info;
+ 	struct il4965_tx_resp *tx_resp = (void *)&pkt->u.raw[0];
+ 	u32 status = le32_to_cpu(tx_resp->u.status);
+-	int uninitialized_var(tid);
++	int tid;
+ 	int sta_id;
+ 	int freed;
+ 	u8 *qc = NULL;
+diff --git a/drivers/net/wireless/realtek/rtlwifi/rtl8192cu/hw.c b/drivers/net/wireless/realtek/rtlwifi/rtl8192cu/hw.c
+index f070f25..1e4ccf4 100644
+--- a/drivers/net/wireless/realtek/rtlwifi/rtl8192cu/hw.c
++++ b/drivers/net/wireless/realtek/rtlwifi/rtl8192cu/hw.c
+@@ -592,7 +592,7 @@ static void _rtl92cu_init_chipn_one_out_ep_priority(struct ieee80211_hw *hw,
+ 						    bool wmm_enable,
+ 						    u8 queue_sel)
+ {
+-	u16 uninitialized_var(value);
++	u16 value;
+ 
+ 	switch (queue_sel) {
+ 	case TX_SELE_HQ:
+@@ -618,8 +618,8 @@ static void _rtl92cu_init_chipn_two_out_ep_priority(struct ieee80211_hw *hw,
+ 						     u8 queue_sel)
+ {
+ 	u16 beq, bkq, viq, voq, mgtq, hiq;
+-	u16 uninitialized_var(valuehi);
+-	u16 uninitialized_var(valuelow);
++	u16 valuehi;
++	u16 valuelow;
+ 
+ 	switch (queue_sel) {
+ 	case (TX_SELE_HQ | TX_SELE_LQ):
+diff --git a/drivers/ssb/driver_chipcommon.c b/drivers/ssb/driver_chipcommon.c
+index 2cc5744..f50d5f9 100644
+--- a/drivers/ssb/driver_chipcommon.c
++++ b/drivers/ssb/driver_chipcommon.c
+@@ -119,7 +119,7 @@ void ssb_chipco_set_clockmode(struct ssb_chipcommon *cc,
+ static enum ssb_clksrc chipco_pctl_get_slowclksrc(struct ssb_chipcommon *cc)
+ {
+ 	struct ssb_bus *bus = cc->dev->bus;
+-	u32 uninitialized_var(tmp);
++	u32 tmp;
+ 
+ 	if (cc->dev->id.revision < 6) {
+ 		if (bus->bustype == SSB_BUSTYPE_SSB ||
+@@ -149,7 +149,7 @@ static enum ssb_clksrc chipco_pctl_get_slowclksrc(struct ssb_chipcommon *cc)
+ /* Get maximum or minimum (depending on get_max flag) slowclock frequency. */
+ static int chipco_pctl_clockfreqlimit(struct ssb_chipcommon *cc, int get_max)
+ {
+-	int uninitialized_var(limit);
++	int limit;
+ 	enum ssb_clksrc clocksrc;
+ 	int divisor = 1;
+ 	u32 tmp;
