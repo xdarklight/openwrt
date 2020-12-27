@@ -412,7 +412,7 @@ $(eval $(call KernelPackage,usb2-pci))
 
 define KernelPackage/usb-dwc2
   TITLE:=DWC2 USB controller driver
-  DEPENDS:=+USB_GADGET_SUPPORT:kmod-usb-gadget
+  DEPENDS:=+USB_GADGET_SUPPORT:kmod-usb-gadget +!LINUX_5_4:kmod-usb-role-switch
   KCONFIG:= \
 	CONFIG_USB_PCI=y \
 	CONFIG_USB_DWC2 \
@@ -1573,7 +1573,9 @@ $(eval $(call KernelPackage,usbip-server))
 
 define KernelPackage/usb-chipidea
   TITLE:=Host and device support for Chipidea controllers
-  DEPENDS:=+USB_GADGET_SUPPORT:kmod-usb-gadget @TARGET_ath79 +kmod-usb-ehci +kmod-usb-phy-nop
+  DEPENDS:= \
+	+USB_GADGET_SUPPORT:kmod-usb-gadget @TARGET_ath79 +kmod-usb-ehci \
+	+kmod-usb-phy-nop +kmod-usb-role-switch
   KCONFIG:= \
 	CONFIG_EXTCON \
 	CONFIG_USB_CHIPIDEA \
@@ -1583,8 +1585,7 @@ define KernelPackage/usb-chipidea
   FILES:= \
 	$(LINUX_DIR)/drivers/extcon/extcon-core.ko \
 	$(LINUX_DIR)/drivers/usb/chipidea/ci_hdrc.ko \
-	$(LINUX_DIR)/drivers/usb/common/ulpi.ko \
-	$(LINUX_DIR)/drivers/usb/roles/roles.ko
+	$(LINUX_DIR)/drivers/usb/common/ulpi.ko
   AUTOLOAD:=$(call AutoLoad,39,ci_hdrc,1)
   $(call AddDepends/usb)
 endef
@@ -1682,6 +1683,7 @@ endef
 
 $(eval $(call KernelPackage,usb-net2280))
 
+
 define KernelPackage/chaoskey
   SUBMENU:=$(USB_MENU)
   TITLE:=Chaoskey hardware RNG support
@@ -1698,3 +1700,11 @@ endef
 
 $(eval $(call KernelPackage,chaoskey))
 
+
+define KernelPackage/usb-role-switch
+  TITLE:=USB Role Switch Support
+  KCONFIG:=CONFIG_USB_ROLE_SWITCH
+  FILES:=$(LINUX_DIR)/drivers/usb/roles/roles.ko
+endef
+
+$(eval $(call KernelPackage,usb-role-switch))
