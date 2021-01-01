@@ -1,0 +1,74 @@
+From f3473ffe0933c445616a7640c380d58dc714262f Mon Sep 17 00:00:00 2001
+From: Mathias Kresin <dev@kresin.me>
+Date: Fri, 1 Jan 2021 13:23:55 +0100
+Subject: [PATCH] genirq/irqdomain: Disable partial trimming of irq_data
+ hierarchy
+
+The irq_domain_trim_hierarchy() function doesn't consider the MIPS + IPI
+IRQ domain hierarchy as valid.
+
+The IPI domain has the MIPS domain set as parent but the parent domain
+has no chip set. Hence irq_domain_trim_hierarchy() errors out with
+-EINVAL, IPI isn't setup and the kernel panics.
+
+cat /sys/kernel/debug/irq/domains/unknown-2-6
+name:   unknown-2-6 (IPI/MIPSMT)
+ size:   2
+ mapped: 2
+ flags:  0x0000000b
+ parent: unknown-1
+    name:   unknown-1 (MIPS)
+     size:   8
+     mapped: 10
+     flags:  0x00000002
+
+So far i haven't figured out which part of the code is wrong. Is the
+domain/hierarchy setup in irq-mips-cpu.c wrong or do we hit a corner
+case which irq_domain_trim_hierarchy() take care of.
+
+There are two workarounds. Either call irq_domain_disconnect_hierarchy()
+in mips_cpu_ipi_alloc() if we have parent domain or disable to call to
+irq_domain_trim_hierarchy() at all. Since the later restores the pre
+5.10 behaviour, take this route.
+
+Signed-off-by: Mathias Kresin <dev@kresin.me>
+---
+ kernel/irq/irqdomain.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+--- a/kernel/irq/irqdomain.c
++++ b/kernel/irq/irqdomain.c
+@@ -1191,6 +1191,7 @@ int irq_domain_disconnect_hierarchy(stru
+ 	return 0;
+ }
+ 
++#if 0
+ static int irq_domain_trim_hierarchy(unsigned int virq)
+ {
+ 	struct irq_data *tail, *irqd, *irq_data;
+@@ -1239,6 +1240,7 @@ static int irq_domain_trim_hierarchy(uns
+ 
+ 	return 0;
+ }
++#endif
+ 
+ static int irq_domain_alloc_irq_data(struct irq_domain *domain,
+ 				     unsigned int virq, unsigned int nr_irqs)
+@@ -1448,6 +1450,7 @@ int __irq_domain_alloc_irqs(struct irq_d
+ 		goto out_free_irq_data;
+ 	}
+ 
++#if 0
+ 	for (i = 0; i < nr_irqs; i++) {
+ 		ret = irq_domain_trim_hierarchy(virq + i);
+ 		if (ret) {
+@@ -1455,7 +1458,8 @@ int __irq_domain_alloc_irqs(struct irq_d
+ 			goto out_free_irq_data;
+ 		}
+ 	}
+-	
++#endif
++
+ 	for (i = 0; i < nr_irqs; i++)
+ 		irq_domain_insert_irq(virq + i);
+ 	mutex_unlock(&irq_domain_mutex);
