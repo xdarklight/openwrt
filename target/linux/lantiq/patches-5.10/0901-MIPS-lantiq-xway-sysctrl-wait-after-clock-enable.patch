@@ -1,0 +1,41 @@
+From a1e8656011465ce487fd5a2fed530b17703643b6 Mon Sep 17 00:00:00 2001
+From: Mathias Kresin <dev@kresin.me>
+Date: Sun, 3 Jan 2021 10:29:31 +0100
+Subject: [PATCH] MIPS: lantiq: xway: sysctrl: wait after clock enable
+
+Commit 65dc2e725286 ("usb: dwc2: Update Core Reset programming flow.")
+revealed that the dwc2 core isn't ready immediately after enabling it's
+clocks.
+
+Add a short delay to let the dwc2 core get up and running. There isn't
+any documentation how much time is required, the value was chosen based
+on different tests.
+
+Signed-off-by: Mathias Kresin <dev@kresin.me>
+---
+ arch/mips/lantiq/xway/sysctrl.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+--- a/arch/mips/lantiq/xway/sysctrl.c
++++ b/arch/mips/lantiq/xway/sysctrl.c
+@@ -12,6 +12,7 @@
+ #include <linux/of.h>
+ #include <linux/of_platform.h>
+ #include <linux/of_address.h>
++#include <linux/delay.h>
+ 
+ #include <lantiq_soc.h>
+ 
+@@ -222,6 +223,12 @@ static int pmu_enable(struct clk *clk)
+ 	if (!retry)
+ 		panic("activating PMU module failed!");
+ 
++	/*
++	 * at least on vr9 the dwc2 usb requires some extra time to be
++	 * operational after enabling the clock
++	 */
++	usleep_range(100, 200);
++
+ 	return 0;
+ }
+ 
