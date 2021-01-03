@@ -177,8 +177,8 @@
 		ranges = <0x0 0x10000000 0xf000000>;
 		reg =	<0x1f400000 0x1000>,
 			<0x10000000 0xf000000>;
-		regmap = <&rcu0>;
-		offset-endianness = <0x4c>;
+		lantiq,rcu = <&rcu0>;
+		lantiq,offset-endianness = <0x4c>;
 		#address-cells = <1>;
 		#size-cells = <1>;
 
