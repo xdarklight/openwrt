@@ -524,23 +524,33 @@
 		};
 
 		pci0: pci@e105400 {
-			status = "disabled";
+			compatible = "lantiq,xrx200-pci", "lantiq,xway-pci";
+
+			reg = <0xe105400 0x400>, <0x7000000 0x8000>;
+			reg-names = "ctrl", "config";
+
+			resets = <&reset0 13 13>;
+
+			interrupt-parent = <&icu0>;
+			interrupts = <57>, <58>;
+			interrupt-names = "ir", "wake";
 
 			#address-cells = <3>;
 			#size-cells = <2>;
+
 			#interrupt-cells = <1>;
-			compatible = "lantiq,pci-xway";
-			bus-range = <0x0 0x0>;
-			ranges = <0x2000000 0 0x8000000 0x8000000 0 0x2000000   /* pci memory */
-				0x1000000 0 0x00000000 0xae00000 0 0x200000>; /* io space */
-			reg = <0x7000000 0x8000         /* config space */
-				0xe105400 0x400>;       /* pci bridge */
-			lantiq,bus-clock = <33333333>;
 			interrupt-map-mask = <0xf800 0x0 0x0 0x7>;
 			interrupt-map = <0x7000 0 0 1 &icu0 30 1>; /* slot 14, irq 30 */
-			req-mask = <0x1>; /* GNT1 */
+
+			bus-range = <0x0 0xf>;
+			ranges = <0x02000000 0 0x18000000 0x8000000 0 0x2000000>;
 
 			device_type = "pci";
+
+			lantiq,bus-clock = <33333333>;
+			req-mask = <0x1>; /* GNT1 */
+
+			status = "disabled";
 		};
 	};
 
