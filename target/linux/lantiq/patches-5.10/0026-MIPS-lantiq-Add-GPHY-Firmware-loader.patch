@@ -97,9 +97,9 @@ Signed-off-by: Mathias Kresin <dev@kresin.me>
  CONFIG_NR_CPUS=2
 --- a/arch/mips/lantiq/Kconfig
 +++ b/arch/mips/lantiq/Kconfig
-@@ -62,4 +62,8 @@ config PCIE_LANTIQ_MSI
- 	depends on PCIE_LANTIQ && PCI_MSI
- 	default y
+@@ -53,4 +53,8 @@ config PCI_LANTIQ
+ 	bool "PCI Support"
+ 	depends on SOC_XWAY && PCI
  
 +config XRX200_PHY_FW
 +	bool "XRX200 PHY firmware loader"

@@ -466,27 +466,48 @@
 		};
 
 		pcie0: pcie@d900000 {
-			compatible = "lantiq,pcie-xrx200";
+			compatible = "lantiq,xrx200-pcie", "snps,dw-pcie";
 
-			#interrupt-cells = <1>;
 			#size-cells = <2>;
 			#address-cells = <3>;
 
-			reg = <0xd900000 0x1000>;
+			reg = <0xd900000 0x1000>,
+			      <0xd000000 0x800000>,
+			      <0xe100900 0x100>;
+			reg-names = "dbi", "config", "app";
+
+			big-endian;
+
+			ranges = <0x2000000 0 0x1c000000 0xc000000 0 0x1000000>;
 
 			interrupt-parent = <&icu0>;
-			interrupts = <161 144>;
+			interrupts = <161>, <162>, <120>;
+			interrupt-names = "ir", "wake", "l3";
+
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 0x7>;
+			interrupt-map = <0 0 0 1 &icu0 144>,
+					<0 0 0 2 &icu0 145>,
+					<0 0 0 3 &icu0 146>,
+					<0 0 0 4 &icu0 147>;
 
 			phys = <&pcie0_phy LANTIQ_PCIE_PHY_MODE_36MHZ>;
 			phy-names = "pcie";
 
 			resets = <&reset0 22 22>;
 
-			lantiq,rcu = <&rcu0>;
+			reset-gpios = <&gpio 38 GPIO_ACTIVE_LOW>;
+			num-lanes = <1>;
 
 			device_type = "pci";
+			bus-range = <0x00 0x08>;
 
-			gpio-reset = <&gpio 38 GPIO_ACTIVE_HIGH>;
+			pcie_bridge0: bridge@0,0,0 {
+				#size-cells = <2>;
+				#address-cells = <3>;
+				reg = <0 0 0 0 0>;
+				ranges;
+			};
 		};
 
 		pci0: pci@e105400 {

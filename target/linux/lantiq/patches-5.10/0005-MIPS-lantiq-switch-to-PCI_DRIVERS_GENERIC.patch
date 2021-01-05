@@ -1,0 +1,25 @@
+From 7d38457e4e394ac158611a53822b6a842736641c Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Tue, 5 Jan 2021 00:11:51 +0100
+Subject: [PATCH] MIPS: lantiq: switch to PCI_DRIVERS_GENERIC
+
+The new in-tree PCIe driver for the Lantiq SoCs requires this. Also the
+existing PCI driver has been converted over to use the generic PCI
+driver framework. Enable PCI_DRIVERS_GENERIC for the Lantiq SOC_XWAY
+target.
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ arch/mips/lantiq/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/arch/mips/lantiq/Kconfig
++++ b/arch/mips/lantiq/Kconfig
+@@ -20,6 +20,7 @@ config SOC_XWAY
+ 	bool "XWAY"
+ 	select SOC_TYPE_XWAY
+ 	select HAVE_PCI
++	select PCI_DRIVERS_GENERIC
+ 	select MFD_SYSCON
+ 	select MFD_CORE
+ 

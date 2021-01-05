@@ -1,0 +1,40 @@
+From 071c8c221e71dabcc73f9d615d8bb95f5f3cda4f Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Sun, 3 Jan 2021 21:09:43 +0100
+Subject: [PATCH 1/2] soc: lantiq: fpi-bus: Configure the PCIe controller
+ endianness
+
+The PCIe controller is a child of the FPI bus. Configure it's endianness
+registers so the PCIe controller registers can be accessed.
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ drivers/soc/lantiq/fpi-bus.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+--- a/drivers/soc/lantiq/fpi-bus.c
++++ b/drivers/soc/lantiq/fpi-bus.c
+@@ -22,7 +22,10 @@
+ #define XBAR_FPI_BURST_EN	BIT(1)
+ #define XBAR_AHB_BURST_EN	BIT(2)
+ 
+-#define RCU_VR9_BE_AHB1S	0x00000008
++#define RCU_VR9_BE_PCIEM	BIT(0)
++#define RCU_VR9_BE_XBARM	BIT(1)
++#define RCU_VR9_BE_AHB1S	BIT(3)
++#define RCU_VR9_BE_PCIES	BIT(4)
+ 
+ static int ltq_fpi_probe(struct platform_device *pdev)
+ {
+@@ -50,7 +53,10 @@ static int ltq_fpi_probe(struct platform
+ 	}
+ 
+ 	ret = regmap_update_bits(rcu_regmap, rcu_ahb_endianness_reg_offset,
+-				 RCU_VR9_BE_AHB1S, RCU_VR9_BE_AHB1S);
++				 RCU_VR9_BE_PCIEM | RCU_VR9_BE_XBARM |
++				 RCU_VR9_BE_AHB1S | RCU_VR9_BE_PCIES,
++				 RCU_VR9_BE_PCIEM | RCU_VR9_BE_AHB1S |
++				 RCU_VR9_BE_PCIES);
+ 	if (ret) {
+ 		dev_warn(&pdev->dev,
+ 			 "Failed to configure RCU AHB endianness\n");
