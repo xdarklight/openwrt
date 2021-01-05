@@ -170,6 +170,18 @@
 				#phy-cells = <0>;
 			};
 		};
+
+		msi_pic: interrupt-controller@700000 {
+			compatible = "lantiq,xrx200-msi-pic";
+
+			reg = <0x700000 0x44>, <0x600000 0x100000>;
+			reg-names = "pic", "msi";
+
+			interrupt-parent = <&icu0>;
+			lantiq,msi-irqs = <163>, <164>, <165>, <166>;
+
+			msi-controller;
+		};
 	};
 
 	fpi@10000000 {
@@ -490,6 +502,7 @@
 					<0 0 0 2 &icu0 145>,
 					<0 0 0 3 &icu0 146>,
 					<0 0 0 4 &icu0 147>;
+			msi-parent = <&msi_pic>;
 
 			phys = <&pcie0_phy LANTIQ_PCIE_PHY_MODE_36MHZ>;
 			phy-names = "pcie";
