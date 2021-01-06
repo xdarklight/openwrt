@@ -16,7 +16,7 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
 
 --- a/arch/mips/include/asm/mach-lantiq/xway/lantiq_soc.h
 +++ b/arch/mips/include/asm/mach-lantiq/xway/lantiq_soc.h
-@@ -102,5 +102,8 @@ int xrx200_gphy_boot(struct device *dev,
+@@ -97,5 +97,8 @@ int xrx200_gphy_boot(struct device *dev,
  extern void ltq_pmu_enable(unsigned int module);
  extern void ltq_pmu_disable(unsigned int module);
  

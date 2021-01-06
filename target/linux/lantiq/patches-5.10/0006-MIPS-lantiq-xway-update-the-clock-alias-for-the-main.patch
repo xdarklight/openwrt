@@ -22,7 +22,7 @@ Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
 
 --- a/arch/mips/lantiq/xway/sysctrl.c
 +++ b/arch/mips/lantiq/xway/sysctrl.c
-@@ -478,12 +478,12 @@ void __init ltq_soc_init(void)
+@@ -467,12 +467,12 @@ void __init ltq_soc_init(void)
  		clkdev_add_pmu("1f106800.phy", "phy", 1, 2, PMU_ANALOG_PCIE0_P);
  		clkdev_add_pmu("1d900000.pcie", "msi", 1, 1, PMU1_PCIE_MSI);
  		clkdev_add_pmu("1f106800.phy", "pdi", 1, 1, PMU1_PCIE_PDI);
@@ -37,7 +37,7 @@ Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
  	}
  
  	if (of_machine_is_compatible("lantiq,ase")) {
-@@ -510,7 +510,7 @@ void __init ltq_soc_init(void)
+@@ -499,7 +499,7 @@ void __init ltq_soc_init(void)
  		clkdev_add_pmu("1f106a00.pcie", "phy", 1, 2, PMU_ANALOG_PCIE2_P);
  		clkdev_add_pmu("1a800000.pcie", "msi", 1, 1, PMU1_PCIE2_MSI);
  		clkdev_add_pmu("1f106a00.pcie", "pdi", 1, 1, PMU1_PCIE2_PDI);
@@ -46,7 +46,7 @@ Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
  		clkdev_add_pmu("1e10b308.eth", NULL, 0, 0, PMU_SWITCH | PMU_PPE_DP);
  		clkdev_add_pmu("1da00000.usif", "NULL", 1, 0, PMU_USIF);
  		clkdev_add_pmu("1e103100.deu", NULL, 1, 0, PMU_DEU);
-@@ -533,11 +533,11 @@ void __init ltq_soc_init(void)
+@@ -522,11 +522,11 @@ void __init ltq_soc_init(void)
  		clkdev_add_pmu("1f203034.usb2-phy", "phy", 1, 0, PMU_USB1_P);
  		clkdev_add_pmu("1e106000.usb", "otg", 1, 0, PMU_USB1 | PMU_AHBM);
  		clkdev_add_pmu("1f106800.phy", "phy", 1, 1, PMU1_PCIE_PHY);

@@ -1,0 +1,320 @@
+From 48dcde04359939955f6a1d781902322fa2af8eca Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Wed, 10 Jul 2019 21:19:32 +0200
+Subject: [PATCH] MIPS: lantiq: add an irq_domain and irq_chip for EBU
+
+The PCI_INTA on Lantiq SoCs is routed througt the EBU IP block:
+EBU configures the interrupt type, has a registers to enable/disable
+and ACK the interrupt. ICU is the parent interrupt-controller, there the
+EBU bit also has to be masked and acked.
+
+Move all EBU interrupt logic into ebu.c and expose it using an
+irq_domain and irq_chip.
+Drop the hardcoded EBU interrupt configuration from pci-lantiq.c as this
+can now be expressed in device tree by passing the EBU interrupt line to
+PCI_INTA (using for example "... &ebu0 0 IRQ_TYPE_LEVEL_LOW").
+Also drop the EBU interrupt masking from irq.c because that's now
+managed by EBU's own irq_ack callback.
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ .../include/asm/mach-lantiq/xway/lantiq_soc.h |   3 -
+ arch/mips/lantiq/ebu.c                        | 187 ++++++++++++++++--
+ arch/mips/lantiq/irq.c                        |  11 --
+ arch/mips/pci/pci-lantiq.c                    |   4 -
+ 4 files changed, 175 insertions(+), 30 deletions(-)
+
+diff --git a/arch/mips/include/asm/mach-lantiq/xway/lantiq_soc.h b/arch/mips/include/asm/mach-lantiq/xway/lantiq_soc.h
+index 02a64ad6c0cc..5555deb02397 100644
+--- a/arch/mips/include/asm/mach-lantiq/xway/lantiq_soc.h
++++ b/arch/mips/include/asm/mach-lantiq/xway/lantiq_soc.h
+@@ -79,9 +79,6 @@ extern __iomem void *ltq_cgu_membase;
+ #define LTQ_EARLY_ASC		KSEG1ADDR(LTQ_ASC1_BASE_ADDR)
+ 
+ /* EBU - external bus unit */
+-#define LTQ_EBU_PCC_CON		0x0090
+-#define LTQ_EBU_PCC_IEN		0x00A4
+-#define LTQ_EBU_PCC_ISTAT	0x00A0
+ #define LTQ_EBU_BUSCON1		0x0064
+ #define LTQ_EBU_ADDRSEL1	0x0024
+ 
+diff --git a/arch/mips/lantiq/ebu.c b/arch/mips/lantiq/ebu.c
+index 0c813fd27e11..275f7a7c947d 100644
+--- a/arch/mips/lantiq/ebu.c
++++ b/arch/mips/lantiq/ebu.c
+@@ -7,7 +7,11 @@
+ #include <linux/bits.h>
+ #include <linux/export.h>
+ #include <linux/ioport.h>
++#include <linux/irqchip.h>
++#include <linux/irqchip/chained_irq.h>
++#include <linux/irqdomain.h>
+ #include <linux/of.h>
++#include <linux/of_irq.h>
+ #include <linux/of_platform.h>
+ #include <linux/of_address.h>
+ 
+@@ -15,8 +19,22 @@
+ 
+ #define LTQ_EBU_BUSCON0				0x0060
+ #define LTQ_EBU_BUSCON_WRDIS			BIT(31)
++#define LTQ_EBU_PCC_CON				0x0090
++#define LTQ_EBU_PCC_CON_PCCARD_ON		BIT(0)
++#define LTQ_EBU_PCC_CON_IREQ_RISING_EDGE        0x2
++#define LTQ_EBU_PCC_CON_IREQ_FALLING_EDGE       0x4
++#define LTQ_EBU_PCC_CON_IREQ_BOTH_EDGE          0x6
++#define LTQ_EBU_PCC_CON_IREQ_DIS                0x8
++#define LTQ_EBU_PCC_CON_IREQ_HIGH_LEVEL_DETECT  0xa
++#define LTQ_EBU_PCC_CON_IREQ_LOW_LEVEL_DETECT	0xc
++#define LTQ_EBU_PCC_CON_IREQ_MASK		0xe
++#define LTQ_EBU_PCC_ISTAT			0x00a0
++#define LTQ_EBU_PCC_ISTAT_PCI			BIT(4)
++#define LTQ_EBU_PCC_IEN				0x00a4
++#define LTQ_EBU_PCC_IEN_PCI_EN			BIT(4)
+ 
+ void __iomem *ltq_ebu_membase;
++static u32 ltq_ebu_pci_inta;
+ 
+ struct ltq_ebu_data {
+ 	bool		initialize_buscon0_wrdis;
+@@ -64,29 +82,168 @@ static const struct of_device_id of_ebu_ids[] __initconst = {
+ 	{ /* sentinel */ },
+ };
+ 
++static void ltq_ebu_ack_irq(struct irq_data *d)
++{
++	ltq_ebu_w32(LTQ_EBU_PCC_ISTAT_PCI, LTQ_EBU_PCC_ISTAT);
++}
++
++static void ltq_ebu_mask_irq(struct irq_data *d)
++{
++	ltq_ebu_w32(ltq_ebu_r32(LTQ_EBU_PCC_IEN) & ~LTQ_EBU_PCC_IEN_PCI_EN,
++		    LTQ_EBU_PCC_IEN);
++}
++
++static void ltq_ebu_unmask_irq(struct irq_data *d)
++{
++	ltq_ebu_w32(ltq_ebu_r32(LTQ_EBU_PCC_IEN) | LTQ_EBU_PCC_IEN_PCI_EN,
++		    LTQ_EBU_PCC_IEN);
++}
++
++static int ltq_ebu_set_irq_type(struct irq_data *d, unsigned int flow_type)
++{
++	u32 val = ltq_ebu_r32(LTQ_EBU_PCC_CON);
++
++	val &= ~LTQ_EBU_PCC_CON_IREQ_MASK;
++
++	switch (flow_type & IRQ_TYPE_SENSE_MASK) {
++	case IRQ_TYPE_NONE:
++		val |= LTQ_EBU_PCC_CON_IREQ_DIS;
++		break;
++
++	case IRQ_TYPE_EDGE_RISING:
++		val |= LTQ_EBU_PCC_CON_IREQ_RISING_EDGE;
++		break;
++
++	case IRQ_TYPE_EDGE_FALLING:
++		val |= LTQ_EBU_PCC_CON_IREQ_FALLING_EDGE;
++		break;
++
++	case IRQ_TYPE_EDGE_BOTH:
++		val |= LTQ_EBU_PCC_CON_IREQ_BOTH_EDGE;
++		break;
++
++	case IRQ_TYPE_LEVEL_HIGH:
++		val |= LTQ_EBU_PCC_CON_IREQ_HIGH_LEVEL_DETECT;
++		break;
++
++	case IRQ_TYPE_LEVEL_LOW:
++		val |= LTQ_EBU_PCC_CON_IREQ_LOW_LEVEL_DETECT;
++		break;
++
++	default:
++		pr_err("Invalid trigger mode %x for IRQ %d\n", flow_type,
++		       d->irq);
++		return -EINVAL;
++	}
++
++	ltq_ebu_w32(val, LTQ_EBU_PCC_CON);
++
++	return 0;
++}
++
++static struct irq_chip ltq_ebu_irq_chip = {
++	.name = "EBU",
++	.irq_ack = ltq_ebu_ack_irq,
++	.irq_mask = ltq_ebu_mask_irq,
++	.irq_unmask = ltq_ebu_unmask_irq,
++	.irq_set_type = ltq_ebu_set_irq_type,
++};
++
++static int ltq_ebu_irq_domain_translate(struct irq_domain *d,
++					struct irq_fwspec *fwspec,
++					unsigned long *hwirq,
++					unsigned int *type)
++{
++	if (!is_of_node(fwspec->fwnode))
++		return -EINVAL;
++
++	if (fwspec->param_count != 2)
++		return -EINVAL;
++
++	if (fwspec->param[0] != 0)
++		return -EINVAL;
++
++	*hwirq = ltq_ebu_pci_inta;
++	*type = fwspec->param[1] & IRQ_TYPE_SENSE_MASK;
++
++	return 0;
++}
++
++static int ltq_ebu_irq_domain_alloc(struct irq_domain *domain,
++				    unsigned int virq, unsigned int nr_irqs,
++				    void *arg)
++{
++	int ret;
++	irq_hw_number_t hwirq;
++	unsigned int type;
++	struct irq_fwspec *fwspec = arg;
++	struct irq_fwspec parent_fwspec = *fwspec;
++
++	ret = ltq_ebu_irq_domain_translate(domain, fwspec, &hwirq, &type);
++	if (ret)
++		return ret;
++
++	if (WARN_ON(nr_irqs != 1))
++		return -EINVAL;
++
++	irq_domain_set_hwirq_and_chip(domain, virq, hwirq, &ltq_ebu_irq_chip,
++				      NULL);
++
++	parent_fwspec.fwnode = domain->parent->fwnode;
++
++	return irq_domain_alloc_irqs_parent(domain, virq, nr_irqs,
++					    &parent_fwspec);
++}
++
++static const struct irq_domain_ops ltq_ebu_irqdomain_ops = {
++	.translate	= ltq_ebu_irq_domain_translate,
++	.alloc		= ltq_ebu_irq_domain_alloc,
++	.free		= irq_domain_free_irqs_common,
++};
++
++static int ltq_ebu_add_irqchip(struct device_node *np)
++{
++	struct irq_domain *parent_domain, *domain;
++	int ret;
++
++	ret = of_property_read_u32(np, "lantiq,pci-inta", &ltq_ebu_pci_inta);
++	if (ret) {
++		pr_err("%pOF: Could not read the 'lantiq,pci-inta' property\n",
++		       np);
++		return ret;
++	}
++
++	parent_domain = irq_find_host(of_irq_find_parent(np));
++	if (!parent_domain) {
++		pr_err("%pOF: No interrupt-parent found\n", np);
++		return -EINVAL;
++	}
++
++	domain = irq_domain_add_hierarchy(parent_domain, 0, 1, np,
++					  &ltq_ebu_irqdomain_ops, NULL);
++	if (!domain) {
++		pr_err("%pOF: Could not register EBU IRQ domain\n", np);
++		return -ENOMEM;
++	}
++
++	return 0;
++}
++
+ static int __init ltq_ebu_setup(void)
+ {
+ 	const struct ltq_ebu_data *ebu_data;
+ 	const struct of_device_id *match;
+-	struct resource res_ebu;
+ 	struct device_node *np;
+ 	u32 val;
++	int ret;
+ 
+ 	np = of_find_matching_node_and_match(NULL, of_ebu_ids, &match);
+ 	if (!np)
+ 		panic("Failed to load the EBU node from devicetree");
+ 
+-	if (of_address_to_resource(np, 0, &res_ebu))
+-		panic("Failed to get the EBU resources");
+-
+-	if ((request_mem_region(res_ebu.start, resource_size(&res_ebu),
+-				res_ebu.name) < 0))
+-		pr_err("Failed to request the EBU resources");
+-
+-	ltq_ebu_membase = ioremap_nocache(res_ebu.start,
+-						resource_size(&res_ebu));
+-	if (!ltq_ebu_membase)
+-		panic("Failed to remap the EBU resources");
++	ltq_ebu_membase = of_io_request_and_map(np, 0, "ebu");
++	if (IS_ERR(ltq_ebu_membase))
++		panic("Failed to request and map the EBU resources");
+ 
+ 	ebu_data = match->data;
+ 
+@@ -95,6 +252,12 @@ static int __init ltq_ebu_setup(void)
+ 		ltq_ebu_w32(val, LTQ_EBU_BUSCON0);
+ 	}
+ 
++	if (of_property_read_bool(np, "interrupt-controller")) {
++		ret = ltq_ebu_add_irqchip(np);
++		if (ret)
++			return ret;
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/arch/mips/lantiq/irq.c b/arch/mips/lantiq/irq.c
+index 76806d11e483..8ac9337f2724 100644
+--- a/arch/mips/lantiq/irq.c
++++ b/arch/mips/lantiq/irq.c
+@@ -41,12 +41,6 @@
+ /* the performance counter */
+ #define LTQ_PERF_IRQ		(INT_NUM_IM4_IRL0 + 31)
+ 
+-/*
+- * irqs generated by devices attached to the EBU need to be acked in
+- * a special manner
+- */
+-#define LTQ_ICU_EBU_IRQ		22
+-
+ #define ltq_icu_w32(vpe, m, x, y)	\
+ 	ltq_w32((x), ltq_icu_membase[vpe] + m*LTQ_ICU_IM_SIZE + (y))
+ 
+@@ -301,11 +295,6 @@ static void ltq_hw_irq_handler(struct irq_desc *desc)
+ 	irq = __fls(irq);
+ 	hwirq = irq + MIPS_CPU_IRQ_CASCADE + (INT_NUM_IM_OFFSET * module);
+ 	generic_handle_irq(irq_linear_revmap(ltq_domain, hwirq));
+-
+-	/* if this is a EBU irq, we need to ack it or get a deadlock */
+-	if ((irq == LTQ_ICU_EBU_IRQ) && (module == 0) && LTQ_EBU_PCC_ISTAT)
+-		ltq_ebu_w32(ltq_ebu_r32(LTQ_EBU_PCC_ISTAT) | 0x10,
+-			LTQ_EBU_PCC_ISTAT);
+ }
+ 
+ static int icu_map(struct irq_domain *d, unsigned int irq, irq_hw_number_t hw)
+diff --git a/arch/mips/pci/pci-lantiq.c b/arch/mips/pci/pci-lantiq.c
+index 1ca42f482130..a3f6ab94ee2c 100644
+--- a/arch/mips/pci/pci-lantiq.c
++++ b/arch/mips/pci/pci-lantiq.c
+@@ -190,10 +190,6 @@ static int ltq_pci_startup(struct platform_device *pdev)
+ 	ltq_pci_w32(ltq_pci_r32(PCI_CR_PCI_MOD) | (1 << 24), PCI_CR_PCI_MOD);
+ 	wmb();
+ 
+-	/* setup irq line */
+-	ltq_ebu_w32(ltq_ebu_r32(LTQ_EBU_PCC_CON) | 0xc, LTQ_EBU_PCC_CON);
+-	ltq_ebu_w32(ltq_ebu_r32(LTQ_EBU_PCC_IEN) | 0x10, LTQ_EBU_PCC_IEN);
+-
+ 	/* toggle reset pin */
+ 	if (gpio_is_valid(reset_gpio)) {
+ 		__gpio_set_value(reset_gpio, 0);
+-- 
+2.30.0
+

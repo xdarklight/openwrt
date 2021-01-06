@@ -15,8 +15,6 @@ Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
  3 files changed, 398 insertions(+)
  create mode 100644 drivers/pci/controller/pci-lantiq.c
 
-diff --git a/drivers/pci/controller/Kconfig b/drivers/pci/controller/Kconfig
-index 64e2f5e379aa..8cc29452fd5b 100644
 --- a/drivers/pci/controller/Kconfig
 +++ b/drivers/pci/controller/Kconfig
 @@ -256,6 +256,13 @@ config PCIE_TANGO_SMP8759
@@ -33,11 +31,9 @@ index 64e2f5e379aa..8cc29452fd5b 100644
  config VMD
  	depends on PCI_MSI && X86_64 && SRCU
  	tristate "Intel Volume Management Device Driver"
-diff --git a/drivers/pci/controller/Makefile b/drivers/pci/controller/Makefile
-index 04c6edc285c5..94871764a772 100644
 --- a/drivers/pci/controller/Makefile
 +++ b/drivers/pci/controller/Makefile
-@@ -28,6 +28,7 @@ obj-$(CONFIG_PCIE_ROCKCHIP_EP) += pcie-rockchip-ep.o
+@@ -28,6 +28,7 @@ obj-$(CONFIG_PCIE_ROCKCHIP_EP) += pcie-r
  obj-$(CONFIG_PCIE_ROCKCHIP_HOST) += pcie-rockchip-host.o
  obj-$(CONFIG_PCIE_MEDIATEK) += pcie-mediatek.o
  obj-$(CONFIG_PCIE_TANGO_SMP8759) += pcie-tango.o
@@ -45,9 +41,6 @@ index 04c6edc285c5..94871764a772 100644
  obj-$(CONFIG_VMD) += vmd.o
  obj-$(CONFIG_PCIE_BRCMSTB) += pcie-brcmstb.o
  obj-$(CONFIG_PCI_LOONGSON) += pci-loongson.o
-diff --git a/drivers/pci/controller/pci-lantiq.c b/drivers/pci/controller/pci-lantiq.c
-new file mode 100644
-index 000000000000..ff016c81861a
 --- /dev/null
 +++ b/drivers/pci/controller/pci-lantiq.c
 @@ -0,0 +1,390 @@
@@ -441,6 +434,3 @@ index 000000000000..ff016c81861a
 +
 +MODULE_DESCRIPTION("Lantiq Danube/xRX100/xRX200 PCI controller driver");
 +MODULE_LICENSE("GPL v2");
--- 
-2.30.0
-

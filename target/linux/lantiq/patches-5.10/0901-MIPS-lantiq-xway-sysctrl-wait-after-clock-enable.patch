@@ -26,7 +26,7 @@ Signed-off-by: Mathias Kresin <dev@kresin.me>
  
  #include <lantiq_soc.h>
  
-@@ -222,6 +223,12 @@ static int pmu_enable(struct clk *clk)
+@@ -221,6 +222,12 @@ static int pmu_enable(struct clk *clk)
  	if (!retry)
  		panic("activating PMU module failed!");
  
