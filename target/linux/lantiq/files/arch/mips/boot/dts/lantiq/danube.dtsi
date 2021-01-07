@@ -26,6 +26,13 @@
 		};
 	};
 
+	cpu_irqc: interrupt-controller {
+		compatible = "mti,cpu-interrupt-controller";
+
+		interrupt-controller;
+		#interrupt-cells = <1>;
+	};
+
 	reboot {
 		compatible = "syscon-reboot";
 
@@ -50,6 +57,8 @@
 			 * capable.
 			 */
 			reg = <0x80200 0xc8>;
+			interrupt-parent = <&cpu_irqc>;
+			interrupts = <2>, <3>, <4>, <5>, <6>;
 		};
 
 		watchdog@803f0 {
@@ -66,12 +75,12 @@
 		ranges = <0x0 0x1f000000 0x7fffff>;
 
 		eiu0: eiu@101000 {
-			#interrupt-cells = <1>;
-			interrupt-controller;
-			compatible = "lantiq,eiu-xway";
+			compatible = "lantiq,danube-eiu", "lantiq,xway-eiu";
 			reg = <0x101000 0x1000>;
 			interrupt-parent = <&icu0>;
-			lantiq,eiu-irqs = <166 135 66>;
+			lantiq,eiu-irqs = <158>, <127>, <58>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
 		};
 
 		pmu0: pmu@102000 {
@@ -90,7 +99,7 @@
 			compatible = "lantiq,vmmc-xway";
 			reg = <0x107000 0x400>;
 			interrupt-parent = <&icu0>;
-			interrupts = <150 151 152 153 154 155>;
+			interrupts = <142>, <143>, <144>, <145>, <146>, <147>;
 		};
 
 		rcu0: rcu@203000 {
@@ -139,7 +148,7 @@
 			compatible = "lantiq,gptu-xway";
 			reg = <0xe100a00 0x100>;
 			interrupt-parent = <&icu0>;
-			interrupts = <126 127 128 129 130 131>;
+			interrupts = <118>, <119>, <120>, <121>, <122>, <123>;
 		};
 
 		gpios: stp@e100bb0 {
@@ -160,7 +169,7 @@
 			compatible = "lantiq,asc";
 			reg = <0xe100400 0x400>;
 			interrupt-parent = <&icu0>;
-			interrupts = <104 105 106>;
+			interrupts = <96>, <97>, <98>;
 			status = "disabled";
 		};
 
@@ -251,7 +260,7 @@
 			compatible = "lantiq,asc";
 			reg = <0xe100c00 0x400>;
 			interrupt-parent = <&icu0>;
-			interrupts = <112 113 114>;
+			interrupts = <104>, <105>, <106>;
 		};
 
 		usb: usb@e101000 {
@@ -259,7 +268,7 @@
 			reg = <0xe101000 0x1000
 				0xe120000 0x3f000>;
 			interrupt-parent = <&icu0>;
-			interrupts = <62>;
+			interrupts = <54>;
 			dr_mode = "host";
 			phys = <&usb_phy>;
 			phy-names = "usb2-phy";
@@ -282,21 +291,21 @@
 			interrupt-controller;
 			#interrupt-cells = <2>;
 			interrupt-parent = <&icu0>;
-			lantiq,pci-inta = <30>;
+			lantiq,pci-inta = <22>;
 		};
 
 		mei@e116000 {
 			compatible = "lantiq,mei-xway";
 			reg = <0xe116000 0x400>;
 			interrupt-parent = <&icu0>;
-			interrupts = <63>;
+			interrupts = <55>;
 		};
 
 		gsw: etop@e180000 {
 			compatible = "lantiq,etop-xway";
 			reg = <0xe180000 0x40000>;
 			interrupt-parent = <&icu0>;
-			interrupts = <73 78>;
+			interrupts = <65>, <70>;
 			mac-address = [ 00 11 22 33 44 55 ];
 		};
 
@@ -304,7 +313,7 @@
 			compatible = "lantiq,ppe-danube";
 			reg = <0xe234000 0x40000>;
 			interrupt-parent = <&icu0>;
-			interrupts = <96>;
+			interrupts = <88>;
 		};
 
 		pci0: pci@e105400 {
@@ -316,7 +325,7 @@
 			resets = <&reset0 13 13>;
 
 			interrupt-parent = <&icu0>;
-			interrupts = <57>, <58>;
+			interrupts = <49>, <50>;
 			interrupt-names = "ir", "wake";
 
 			#address-cells = <3>;
