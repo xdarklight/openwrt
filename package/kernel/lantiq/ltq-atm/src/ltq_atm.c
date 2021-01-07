@@ -279,6 +279,7 @@ static struct atmdev_ops g_ifx_atm_ops = {
 
 static int g_showtime = 0;
 static void *g_xdata_addr = NULL;
+static int ppe_mailbox_irq;
 
 static int ppe_ioctl(struct atm_dev *dev, unsigned int cmd, void *arg)
 {
@@ -435,7 +436,7 @@ static int ppe_open(struct atm_vcc *vcc)
 		*MBOX_IGU1_ISRC = (1 << RX_DMA_CH_AAL) | (1 << RX_DMA_CH_OAM);
 		*MBOX_IGU1_IER  = (1 << RX_DMA_CH_AAL) | (1 << RX_DMA_CH_OAM);
 
-		enable_irq(PPE_MAILBOX_IGU1_INT);
+		enable_irq(ppe_mailbox_irq);
 	}
 
 	/*  set port    */
@@ -481,7 +482,7 @@ static void ppe_close(struct atm_vcc *vcc)
 
 	/*  disable irq */
 	if ( g_atm_priv_data.conn_table == 0 )
-		disable_irq(PPE_MAILBOX_IGU1_INT);
+		disable_irq(ppe_mailbox_irq);
 
 	/*  release bandwidth   */
 	switch ( vcc->qos.txtp.traffic_class )
@@ -1022,7 +1023,7 @@ static void do_ppe_tasklet(unsigned long data)
 	else if (*MBOX_IGU1_ISR >> (FIRST_QSB_QID + 16)) /* TX queue */
 		tasklet_schedule(&g_dma_tasklet);
 	else
-		enable_irq(PPE_MAILBOX_IGU1_INT);
+		enable_irq(ppe_mailbox_irq);
 }
 
 static irqreturn_t mailbox_irq_handler(int irq, void *dev_id)
@@ -1030,7 +1031,7 @@ static irqreturn_t mailbox_irq_handler(int irq, void *dev_id)
 	if ( !*MBOX_IGU1_ISR )
 		return IRQ_HANDLED;
 
-	disable_irq_nosync(PPE_MAILBOX_IGU1_INT);
+	disable_irq_nosync(ppe_mailbox_irq);
 	tasklet_schedule(&g_dma_tasklet);
 
 	return IRQ_HANDLED;
@@ -1806,22 +1807,24 @@ static int ltq_atm_probe(struct platform_device *pdev)
 	}
 
 	/*  register interrupt handler  */
-	ret = request_irq(PPE_MAILBOX_IGU1_INT, mailbox_irq_handler, 0, "atm_mailbox_isr", &g_atm_priv_data);
+	ppe_mailbox_irq = platform_get_irq(pdev, 0);
+	ret = devm_request_irq(&pdev->dev, ppe_mailbox_irq,
+			       mailbox_irq_handler, 0, NULL, &g_atm_priv_data);
 	if ( ret ) {
 		if ( ret == -EBUSY ) {
 			pr_err("IRQ may be occupied by other driver, please reconfig to disable it.\n");
 		} else {
-			pr_err("request_irq fail irq:%d\n", PPE_MAILBOX_IGU1_INT);
+			pr_err("request_irq fail irq:%d\n", ppe_mailbox_irq);
 		}
 		goto REQUEST_IRQ_PPE_MAILBOX_IGU1_INT_FAIL;
 	}
-	disable_irq(PPE_MAILBOX_IGU1_INT);
+	disable_irq(ppe_mailbox_irq);
 
 
 	ret = ops->start(0);
 	if ( ret ) {
 		pr_err("ifx_pp32_start fail!\n");
-		goto PP32_START_FAIL;
+		goto REQUEST_IRQ_PPE_MAILBOX_IGU1_INT_FAIL;
 	}
 
 	port_cell.port_num = ATM_PORT_NUMBER;
@@ -1844,8 +1847,6 @@ static int ltq_atm_probe(struct platform_device *pdev)
 
 	return 0;
 
-PP32_START_FAIL:
-	free_irq(PPE_MAILBOX_IGU1_INT, &g_atm_priv_data);
 REQUEST_IRQ_PPE_MAILBOX_IGU1_INT_FAIL:
 ATM_DEV_REGISTER_FAIL:
 	while ( port_num-- > 0 )
@@ -1867,8 +1868,6 @@ static int ltq_atm_remove(struct platform_device *pdev)
 	invalidate_oam_htu_entry();
 
 	ops->stop(0);
-
-	free_irq(PPE_MAILBOX_IGU1_INT, &g_atm_priv_data);
 
 	for ( port_num = 0; port_num < ATM_PORT_NUMBER; port_num++ )
 		atm_dev_deregister(g_atm_priv_data.port[port_num].dev);

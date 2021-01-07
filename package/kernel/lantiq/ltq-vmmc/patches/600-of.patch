@@ -1,0 +1,135 @@
+--- a/src/mps/drv_mps_vmmc_common.c
++++ b/src/mps/drv_mps_vmmc_common.c
+@@ -54,13 +54,7 @@
+ #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
+ #  define bsp_mask_and_ack_irq      ltq_mask_and_ack_irq
+ #else
+-extern void ltq_mask_and_ack_irq(struct irq_data *d);
+-static void inline bsp_mask_and_ack_irq(int x)
+-{
+-	struct irq_data d;
+-	d.hwirq = x;
+-	ltq_mask_and_ack_irq(&d);
+-}
++#  define bsp_mask_and_ack_irq(_irq)
+ #endif
+ #else
+ #  include <asm/ifx/ifx_regs.h>
+@@ -2973,13 +2967,13 @@ irqreturn_t ifx_mps_ad1_irq (IFX_int32_t
+  * This function is called on occurence of an status interrupt.
+  *
+  * \param   irq      Interrupt number
+- * \param   pDev     Pointer to MPS communication device structure
++ * \param   pChan    Channel number as pointer
+  * \param   regs     Pointer to system registers
+  * \ingroup Internal
+  */
+-irqreturn_t ifx_mps_vc_irq (IFX_int32_t irq, mps_comm_dev * pDev)
++irqreturn_t ifx_mps_vc_irq (IFX_int32_t irq, IFX_void_t * pChan)
+ {
+-   IFX_uint32_t chan = irq - INT_NUM_IM4_IRL14;
++   IFX_uint32_t chan = (IFX_uint32_t) pChan;
+    mps_mbx_dev *mbx_dev = (mps_mbx_dev *) & (pMPSDev->voice_mb[chan]);
+    MPS_VCStatReg_u MPS_VCStatusReg;
+    MbxEventRegs_s events;
+--- a/src/mps/drv_mps_vmmc_linux.c
++++ b/src/mps/drv_mps_vmmc_linux.c
+@@ -44,6 +44,8 @@
+ #include <linux/version.h>
+ #include <linux/delay.h>
+ #include <linux/interrupt.h>
++#include <linux/of.h>
++#include <linux/of_irq.h>
+ #ifdef LINUX_2_6
+ #ifndef UTS_RELEASE
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
+@@ -2183,6 +2185,8 @@ static IFX_int32_t ifx_mps_loadaddr_get_
+ 
+ #endif /* CONFIG_PROC_FS */
+ 
++static struct resource *irqres;
++
+ /**
+    This function initializes the module.
+ \param
+@@ -2202,6 +2206,7 @@ ifx_mps_init_module (IFX_void_t)
+ IFX_int32_t __init ifx_mps_init_module (IFX_void_t)
+ #endif                          /* */
+ {
++   struct device_node *np;
+    IFX_int32_t result;
+    IFX_int32_t i;
+ 
+@@ -2212,6 +2217,19 @@ IFX_int32_t __init ifx_mps_init_module (
+           ("%s%s, (c) 2006-2010 Lantiq Deutschland GmbH\n", IFX_MPS_INFO_STR,
+            ifx_mps_device_version));
+ 
++   np = of_find_compatible_node(NULL, NULL, "lantiq,vmmc-xway");
++   if (!of_device_is_available(np)) {
++      TRACE (MPS, DBG_LEVEL_HIGH,
++             ("IFX_MPS: device-tree node with compatible string \"lantiq,vmmc-xway\" not found\n"));
++      return -EINVAL;
++   }
++
++   if (of_irq_to_resource_table(np, irqres, 6) != 6) {
++      TRACE (MPS, DBG_LEVEL_HIGH,
++             ("IFX_MPS: Failed to get IRQs from device-tree node\n"));
++      return -EINVAL;
++   }
++
+    sprintf (ifx_mps_dev_name, IFX_MPS_DEV_NAME);
+    result = register_chrdev (ifx_mps_major_id, ifx_mps_dev_name, &ifx_mps_fops);
+    if (result < 0)
+@@ -2260,7 +2278,7 @@ IFX_int32_t __init ifx_mps_init_module (
+    /* reset the device before initializing the device driver */
+    ifx_mps_reset ();
+ 
+-  result = request_irq (INT_NUM_IM4_IRL18,
++  result = request_irq (irqres[4].start,
+ #ifdef LINUX_2_6
+                          ifx_mps_ad0_irq, 0x0
+ #else /* */
+@@ -2270,7 +2288,7 @@ IFX_int32_t __init ifx_mps_init_module (
+                          , "mps_mbx ad0", &ifx_mps_dev);
+    if (result)
+       return result;
+-   result = request_irq (INT_NUM_IM4_IRL19,
++   result = request_irq (irqres[5].start,
+ #ifdef LINUX_2_6
+                          ifx_mps_ad1_irq, 0x0
+ #else /* */
+@@ -2285,7 +2303,7 @@ IFX_int32_t __init ifx_mps_init_module (
+    for (i = 0; i < 4; ++i)
+    {
+       sprintf (&voice_channel_int_name[i][0], "mps_mbx vc%d", i);
+-      result = request_irq (INT_NUM_IM4_IRL14 + i,
++      result = request_irq (irqres[i].start,
+ #ifdef LINUX_2_6
+                             ifx_mps_vc_irq, 0x0
+ #else /* */
+@@ -2293,7 +2311,7 @@ IFX_int32_t __init ifx_mps_init_module (
+                              (int, IFX_void_t *,
+                               struct pt_regs *)) ifx_mps_vc_irq, SA_INTERRUPT
+ #endif /* */
+-                            , &voice_channel_int_name[i][0], &ifx_mps_dev);
++                            , &voice_channel_int_name[i][0], (IFX_void_t *) i);
+       if (result)
+          return result;
+    }
+@@ -2446,13 +2464,13 @@ ifx_mps_cleanup_module (IFX_void_t)
+    ifx_mps_release_structures (&ifx_mps_dev);
+ 
+    /* release all interrupts at the system */
+-   free_irq (INT_NUM_IM4_IRL18, &ifx_mps_dev);
+-   free_irq (INT_NUM_IM4_IRL19, &ifx_mps_dev);
++   free_irq (irqres[4].start, &ifx_mps_dev);
++   free_irq (irqres[5].start, &ifx_mps_dev);
+ 
+    /* register status interrupts for voice channels */
+    for (i = 0; i < 4; ++i)
+    {
+-      free_irq (INT_NUM_IM4_IRL14 + i, &ifx_mps_dev);
++      free_irq (irqres[i].start + i, &ifx_mps_dev);
+    }
+ #ifdef CONFIG_PROC_FS
+ #if CONFIG_MPS_HISTORY_SIZE > 0

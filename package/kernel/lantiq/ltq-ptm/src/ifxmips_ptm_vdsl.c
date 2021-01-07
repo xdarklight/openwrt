@@ -978,6 +978,7 @@ static int ltq_ptm_probe(struct platform_device *pdev)
 {
     int ret;
     int i;
+    int irq;
     char ver_str[256];
     struct port_cell_info port_cell = {0};
 
@@ -1008,7 +1009,9 @@ static int ltq_ptm_probe(struct platform_device *pdev)
     }
 
     /*  register interrupt handler  */
-    ret = request_irq(PPE_MAILBOX_IGU1_INT, mailbox_irq_handler, 0, "ptm_mailbox_isr", &g_ptm_priv_data);
+    irq = platform_get_irq(pdev, 0);
+    ret = devm_request_irq(&pdev->dev, irq, mailbox_irq_handler, 0, NULL,
+                           &g_ptm_priv_data);
     if ( ret ) {
         if ( ret == -EBUSY ) {
             err("IRQ may be occupied by other driver, please reconfig to disable it.");
@@ -1018,17 +1021,17 @@ static int ltq_ptm_probe(struct platform_device *pdev)
         }
         goto REQUEST_IRQ_PPE_MAILBOX_IGU1_INT_FAIL;
     }
-    disable_irq(PPE_MAILBOX_IGU1_INT);
+    disable_irq(irq);
 
     ret = ifx_pp32_start(0);
     if ( ret ) {
         err("ifx_pp32_start fail!");
-        goto PP32_START_FAIL;
+        goto REQUEST_IRQ_PPE_MAILBOX_IGU1_INT_FAIL;
     }
     IFX_REG_W32(1 << 16, MBOX_IGU1_IER);    //  enable SWAP interrupt
     IFX_REG_W32(~0, MBOX_IGU1_ISRC);
 
-    enable_irq(PPE_MAILBOX_IGU1_INT);
+    enable_irq(irq);
 
     ifx_mei_atm_showtime_check(&g_showtime, &port_cell, &g_xdata_addr);
     if ( g_showtime ) {
@@ -1045,8 +1048,6 @@ static int ltq_ptm_probe(struct platform_device *pdev)
 
     return 0;
 
-PP32_START_FAIL:
-    free_irq(PPE_MAILBOX_IGU1_INT, &g_ptm_priv_data);
 REQUEST_IRQ_PPE_MAILBOX_IGU1_INT_FAIL:
     i = ARRAY_SIZE(g_net_dev);
 REGISTER_NETDEV_FAIL:
@@ -1073,8 +1074,6 @@ static int ltq_ptm_remove(struct platform_device *pdev)
 
 
     ifx_pp32_stop(0);
-
-    free_irq(PPE_MAILBOX_IGU1_INT, &g_ptm_priv_data);
 
     for ( i = 0; i < ARRAY_SIZE(g_net_dev); i++ )
         unregister_netdev(g_net_dev[i]);

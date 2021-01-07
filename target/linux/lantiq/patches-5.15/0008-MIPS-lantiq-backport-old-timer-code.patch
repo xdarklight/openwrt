@@ -186,7 +186,7 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
  obj-y += vmmc.o
 --- /dev/null
 +++ b/arch/mips/lantiq/xway/timer.c
-@@ -0,0 +1,852 @@
+@@ -0,0 +1,865 @@
 +#ifndef CONFIG_SOC_AMAZON_SE
 +
 +#include <linux/kernel.h>
@@ -195,11 +195,13 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
 +#include <linux/types.h>
 +#include <linux/fs.h>
 +#include <linux/miscdevice.h>
++#include <linux/mod_devicetable.h>
 +#include <linux/init.h>
 +#include <linux/uaccess.h>
 +#include <linux/unistd.h>
 +#include <linux/errno.h>
 +#include <linux/interrupt.h>
++#include <linux/platform_device.h>
 +#include <linux/sched.h>
 +#include <linux/sched/signal.h>
 +
@@ -208,7 +210,6 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
 +#include "../clk.h"
 +
 +#include <lantiq_soc.h>
-+#include <lantiq_irq.h>
 +#include <lantiq_timer.h>
 +
 +#define MAX_NUM_OF_32BIT_TIMER_BLOCKS	6
@@ -223,12 +224,6 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
 + *  GPTC divider is set or not.
 + */
 +#define GPTU_CLC_RMC_IS_SET		0
-+
-+/*
-+ *  Timer Interrupt (IRQ)
-+ */
-+/*  Must be adjusted when ICU driver is available */
-+#define TIMER_INTERRUPT			(INT_NUM_IM3_IRL0 + 22)
 +
 +/*
 + *  Bits Operation
@@ -328,8 +323,9 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
 +#define TIMER_FLAG_MASK_SRC(x)		(x & 0x1000)
 +
 +struct timer_dev_timer {
++	unsigned int timer;
 +	unsigned int f_irq_on;
-+	unsigned int irq;
++	int irq;
 +	unsigned int flag;
 +	unsigned long arg1;
 +	unsigned long arg2;
@@ -371,19 +367,16 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
 +
 +static irqreturn_t timer_irq_handler(int irq, void *p)
 +{
-+	unsigned int timer;
 +	unsigned int flag;
 +	struct timer_dev_timer *dev_timer = (struct timer_dev_timer *)p;
 +
-+	timer = irq - TIMER_INTERRUPT;
-+	if (timer < timer_dev.number_of_timers
-+		&& dev_timer == &timer_dev.timer[timer]) {
++	if (dev_timer->timer < timer_dev.number_of_timers) {
 +		/*  Clear interrupt.    */
-+		ltq_w32(1 << timer, LQ_GPTU_IRNCR);
++		ltq_w32(1 << dev_timer->timer, LQ_GPTU_IRNCR);
 +
 +		/*  Call user hanler or signal. */
 +		flag = dev_timer->flag;
-+		if (!(timer & 0x01)
++		if (!(dev_timer->timer & 0x01)
 +			|| TIMER_FLAG_MASK_SIZE(flag) == TIMER_FLAG_16BIT) {
 +			/* 16-bit timer or timer A of 32-bit timer  */
 +			switch (TIMER_FLAG_MASK_HANDLE(flag)) {
@@ -978,9 +971,9 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
 +	return 0;
 +}
 +
-+int __init lq_gptu_init(void)
++static int lq_gptu_probe(struct platform_device *pdev)
 +{
-+	int ret;
++	int irq, ret;
 +	unsigned int i;
 +
 +	ltq_w32(0, LQ_GPTU_IRNEN);
@@ -1005,15 +998,20 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
 +	}
 +
 +	for (i = 0; i < timer_dev.number_of_timers; i++) {
-+		ret = request_irq(TIMER_INTERRUPT + i, timer_irq_handler, IRQF_TIMER, gptu_miscdev.name, &timer_dev.timer[i]);
++		timer_dev.timer[i].timer = i;
++
++		timer_dev.timer[i].irq = platform_get_irq(pdev, i);
++		if (timer_dev.timer[i].irq < 0)
++			return irq;
++
++		ret = request_irq(timer_dev.timer[i].irq, timer_irq_handler, IRQF_TIMER, gptu_miscdev.name, &timer_dev.timer[i]);
 +		if (ret) {
 +			for (; i >= 0; i--)
-+				free_irq(TIMER_INTERRUPT + i, &timer_dev.timer[i]);
++				free_irq(timer_dev.timer[i].irq, &timer_dev.timer[i]);
 +			misc_deregister(&gptu_miscdev);
 +			printk(KERN_ERR "gptu: failed in requesting irq (%d), get error %d\n", i, -ret);
 +			return ret;
 +		} else {
-+			timer_dev.timer[i].irq = TIMER_INTERRUPT + i;
 +			disable_irq(timer_dev.timer[i].irq);
 +			printk(KERN_INFO "gptu: succeeded to request irq %d\n", timer_dev.timer[i].irq);
 +		}
@@ -1022,7 +1020,7 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
 +	return 0;
 +}
 +
-+void __exit lq_gptu_exit(void)
++static int lq_gptu_remove(struct platform_device *pdev)
 +{
 +	unsigned int i;
 +
@@ -1033,9 +1031,24 @@ Signed-off-by: John Crispin <blogic@openwrt.org>
 +	}
 +	lq_disable_gptu();
 +	misc_deregister(&gptu_miscdev);
++
++	return 0;
 +}
 +
-+module_init(lq_gptu_init);
-+module_exit(lq_gptu_exit);
++
++static const struct of_device_id ltq_gptu_match[] = {
++	{ .compatible = "lantiq,gptu-xway" },
++	{},
++};
++
++static struct platform_driver ltq_gptu_driver = {
++	.probe = lq_gptu_probe,
++	.remove = lq_gptu_remove,
++	.driver = {
++		.name = "ltq-gptu",
++		.of_match_table = ltq_gptu_match,
++	},
++};
++module_platform_driver(ltq_gptu_driver);
 +
 +#endif

@@ -1,6 +1,6 @@
 --- a/arch/mips/pci/ifxmips_pcie.c
 +++ b/arch/mips/pci/ifxmips_pcie.c
-@@ -16,8 +16,15 @@
+@@ -16,8 +16,16 @@
  #include <asm/paccess.h>
  #include <linux/pci.h>
  #include <linux/pci_regs.h>
@@ -11,12 +11,25 @@
  #include <linux/module.h>
  
 +#include <linux/of_gpio.h>
++#include <linux/of_pci.h>
 +#include <linux/of_platform.h>
 +
  #include "ifxmips_pcie.h"
  #include "ifxmips_pcie_reg.h"
  
-@@ -40,6 +47,10 @@
+@@ -25,11 +33,6 @@
+ #define IFX_PCIE_ERROR_INT
+ #define IFX_PCIE_IO_32BIT
+ 
+-#define IFX_PCIE_IR                     (INT_NUM_IM4_IRL0 + 25)
+-#define IFX_PCIE_INTA                   (INT_NUM_IM4_IRL0 + 8)
+-#define IFX_PCIE_INTB                   (INT_NUM_IM4_IRL0 + 9)
+-#define IFX_PCIE_INTC                   (INT_NUM_IM4_IRL0 + 10)
+-#define IFX_PCIE_INTD                   (INT_NUM_IM4_IRL0 + 11)
+ #define MS(_v, _f)  (((_v) & (_f)) >> _f##_S)
+ #define SM(_v, _f)  (((_v) << _f##_S) & (_f))
+ #define IFX_REG_SET_BIT(_f, _r) \
+@@ -40,30 +43,29 @@
  static DEFINE_SPINLOCK(ifx_pcie_lock);
  
  u32 g_pcie_debug_flag = PCIE_MSG_ANY & (~PCIE_MSG_CFG);
@@ -27,7 +40,31 @@
  
  static ifx_pcie_irq_t pcie_irqs[IFX_PCIE_CORE_NR] = {
      {
-@@ -82,6 +93,22 @@ void ifx_pcie_debug(const char *fmt, ...
+         .ir_irq = {
+-            .irq  = IFX_PCIE_IR,
+             .name = "ifx_pcie_rc0",
+         },
+ 
+         .legacy_irq = {
+             {
+                 .irq_bit = PCIE_IRN_INTA,
+-                .irq     = IFX_PCIE_INTA,
+             },
+             {
+                 .irq_bit = PCIE_IRN_INTB,
+-                .irq     = IFX_PCIE_INTB,
+             },
+             {
+                 .irq_bit = PCIE_IRN_INTC,
+-                .irq     = IFX_PCIE_INTC,
+             },
+             {
+                 .irq_bit = PCIE_IRN_INTD,
+-                .irq     = IFX_PCIE_INTD,
+             },
+         },
+     },
+@@ -82,6 +84,22 @@ void ifx_pcie_debug(const char *fmt, ...
  	printk("%s", buf);
  }
  
@@ -50,7 +87,45 @@
  
  static inline int pcie_ltssm_enable(int pcie_port)
  {
-@@ -988,10 +1015,22 @@ int  ifx_pcie_bios_plat_dev_init(struct
+@@ -847,26 +865,20 @@ static irqreturn_t pcie_rc_core_isr(int
+ static int
+ pcie_rc_core_int_init(int pcie_port)
+ {
+-	int ret;
+-
+ 	/* Enable core interrupt */
+ 	IFX_REG_SET_BIT(PCIE_RC_CORE_COMBINED_INT, PCIE_IRNEN(pcie_port));
+ 
+ 	/* Clear it first */
+ 	IFX_REG_SET_BIT(PCIE_RC_CORE_COMBINED_INT, PCIE_IRNCR(pcie_port));
+-	ret = request_irq(pcie_irqs[pcie_port].ir_irq.irq, pcie_rc_core_isr, 0,
+-		pcie_irqs[pcie_port].ir_irq.name, &ifx_pcie_controller[pcie_port]);
+-	if (ret)
+-		printk(KERN_ERR "%s request irq %d failed\n", __func__, IFX_PCIE_IR);
+ 
+-	return ret;
++	return 0;
+ }
+ #endif
+ 
+ int ifx_pcie_bios_map_irq(IFX_PCI_CONST struct pci_dev *dev, u8 slot, u8 pin)
+ {
+ 	u32 irq_bit = 0;
+-	int irq = 0;
++	int irq;
+ 	struct ifx_pci_controller *ctrl = dev->bus->sysdata;
+ 	int pcie_port = ctrl->port;
+ 
+@@ -879,7 +891,7 @@ int ifx_pcie_bios_map_irq(IFX_PCI_CONST
+ 
+ 	/* Pin index so minus one */
+ 	irq_bit = pcie_irqs[pcie_port].legacy_irq[pin - 1].irq_bit;
+-	irq = pcie_irqs[pcie_port].legacy_irq[pin - 1].irq;
++	irq = of_irq_parse_and_map_pci(dev, slot, pin);
+ 	IFX_REG_SET_BIT(irq_bit, PCIE_IRNEN(pcie_port));
+ 	IFX_REG_SET_BIT(irq_bit, PCIE_IRNCR(pcie_port));
+ 	printk("%s dev %s irq %d assigned\n", __func__, pci_name(dev), irq);
+@@ -988,10 +1000,22 @@ int  ifx_pcie_bios_plat_dev_init(struct
  static int
  pcie_rc_initialize(int pcie_port)
  {
@@ -75,7 +150,7 @@
  
  	pcie_ep_gpio_rst_init(pcie_port);
  
-@@ -1000,26 +1039,21 @@ pcie_rc_initialize(int pcie_port)
+@@ -1000,26 +1024,21 @@ pcie_rc_initialize(int pcie_port)
  	* reset PCIe PHY will solve this issue 
  	*/
  	for (i = 0; i < IFX_PCIE_PHY_LOOP_CNT; i++) {
@@ -112,7 +187,7 @@
  
  		/* Enable PCIe PHY and Clock */
  		pcie_core_pmu_setup(pcie_port);
-@@ -1035,6 +1069,10 @@ pcie_rc_initialize(int pcie_port)
+@@ -1035,6 +1054,10 @@ pcie_rc_initialize(int pcie_port)
  		/* Once link is up, break out */
  		if (pcie_app_loigc_setup(pcie_port) == 0)
  			break;
@@ -123,7 +198,7 @@
  	}
  	if (i >= IFX_PCIE_PHY_LOOP_CNT) {
  		printk(KERN_ERR "%s link up failed!!!!!\n", __func__);
-@@ -1045,17 +1083,67 @@ pcie_rc_initialize(int pcie_port)
+@@ -1045,17 +1068,67 @@ pcie_rc_initialize(int pcie_port)
  	return 0;
  }
  
@@ -193,7 +268,7 @@
      for (pcie_port = startup_port; pcie_port < IFX_PCIE_CORE_NR; pcie_port++){
  	if (pcie_rc_initialize(pcie_port) == 0) {
  	    IFX_PCIE_PRINT(PCIE_MSG_INIT, "%s: ifx_pcie_cfg_base 0x%p\n", 
-@@ -1067,6 +1155,7 @@ static int __init ifx_pcie_bios_init(voi
+@@ -1067,6 +1140,7 @@ static int __init ifx_pcie_bios_init(voi
                  return -ENOMEM;
              }
              ifx_pcie_controller[pcie_port].pcic.io_map_base = (unsigned long)io_map_base;
@@ -201,7 +276,24 @@
  
              register_pci_controller(&ifx_pcie_controller[pcie_port].pcic);
              /* XXX, clear error status */
-@@ -1083,6 +1172,30 @@ static int __init ifx_pcie_bios_init(voi
+@@ -1077,12 +1151,47 @@ static int __init ifx_pcie_bios_init(voi
+ 
+         #ifdef IFX_PCIE_ERROR_INT
+             pcie_rc_core_int_init(pcie_port);
++
++            {
++                int irq, ret;
++
++                irq = platform_get_irq_byname(pdev, "ir");
++                ret = devm_request_irq(&pdev->dev, irq, pcie_rc_core_isr, 0,
++                                       pcie_irqs[pcie_port].ir_irq.name,
++                                       &ifx_pcie_controller[pcie_port]);
++                if (ret)
++                  printk(KERN_ERR "%s request irq %d failed\n", __func__, irq);
++            }
+         #endif /* IFX_PCIE_ERROR_INT */
+         }
+     }
  
      return 0;
  }
