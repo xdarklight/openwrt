@@ -1,0 +1,48 @@
+From 623c13295cf4e2d6ee80a6e8bae43529c0f020c9 Mon Sep 17 00:00:00 2001
+From: Russell King <rmk+kernel@armlinux.org.uk>
+Date: Thu, 14 Jan 2021 10:45:44 +0000
+Subject: [PATCH 1/2] dt: ar803x: document SmartEEE properties
+
+The SmartEEE feature of Atheros AR803x PHYs can cause the link to
+bounce. Add DT properties to allow SmartEEE to be disabled, and to
+allow the Tw parameters for 100M and 1G links to be configured.
+
+Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
+Reviewed-by: Rob Herring <robh@kernel.org>
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ .../devicetree/bindings/net/qca,ar803x.yaml      | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/Documentation/devicetree/bindings/net/qca,ar803x.yaml
++++ b/Documentation/devicetree/bindings/net/qca,ar803x.yaml
+@@ -28,6 +28,10 @@ properties:
+     $ref: /schemas/types.yaml#/definitions/uint32
+     enum: [0, 1, 2]
+ 
++  qca,disable-smarteee:
++    description: Disable Atheros SmartEEE feature.
++    type: boolean
++
+   qca,keep-pll-enabled:
+     description: |
+       If set, keep the PLL enabled even if there is no link. Useful if you
+@@ -36,6 +40,18 @@ properties:
+       Only supported on the AR8031.
+     type: boolean
+ 
++  qca,smarteee-tw-us-100m:
++    description: EEE Tw parameter for 100M links.
++    $ref: /schemas/types.yaml#/definitions/uint32
++    minimum: 1
++    maximum: 255
++
++  qca,smarteee-tw-us-1g:
++    description: EEE Tw parameter for gigabit links.
++    $ref: /schemas/types.yaml#/definitions/uint32
++    minimum: 1
++    maximum: 255
++
+   vddio-supply:
+     description: |
+       RGMII I/O voltage regulator (see regulator/regulator.yaml).
