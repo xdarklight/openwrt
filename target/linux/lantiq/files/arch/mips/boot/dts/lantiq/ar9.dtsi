@@ -84,26 +84,23 @@
 		};
 
 		rcu0: rcu@203000 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "lantiq,xrx100-rcu", "simple-mfd", "syscon";
+			compatible = "intel,rcu-xrx100", "simple-mfd", "syscon";
 			reg = <0x203000 0x1000>;
 			ranges = <0x0 0x203000 0x100>;
 			big-endian;
 
-			reset: reset-controller@10 {
-				compatible = "lantiq,xrx100-reset", "lantiq,danube-reset";
-				reg = <0x10 4>, <0x14 4>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 
-				#reset-cells = <2>;
-			};
+			#reset-cells = <3>;
+			intel,global-reset = <0x10 30 29>;
 
 			usb_phy0: usb2-phy@18 {
 				compatible = "lantiq,xrx100-usb2-phy";
 				reg = <0x18 4>;
 				status = "disabled";
 
-				resets = <&reset 4 4>;
+				resets = <&rcu0 0x10 4 4>;
 				reset-names = "ctrl";
 				#phy-cells = <0>;
 			};
@@ -113,7 +110,7 @@
 				reg = <0x34 4>;
 				status = "disabled";
 
-				resets = <&reset 28 28>;
+				resets = <&rcu0 0x10 28 28>;
 				reset-names = "ctrl";
 				#phy-cells = <0>;
 			};
@@ -416,7 +413,7 @@
 
 			device_type = "pci";
 
-			resets = <&reset 13 13>;
+			resets = <&rcu0 0x10 13 13>;
 		};
 	};
 

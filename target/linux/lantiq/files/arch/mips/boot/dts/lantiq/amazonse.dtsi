@@ -81,26 +81,23 @@
 		};
 
 		rcu0: rcu@203000 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "lantiq,ase-rcu", "simple-mfd", "syscon";
+			compatible = "intel,rcu-ase", "simple-mfd", "syscon";
 			reg = <0x203000 0x1000>;
 			ranges = <0x0 0x203000 0x100>;
 			big-endian;
 
-			reset: reset-controller@10 {
-				compatible = "lantiq,danube-reset";
-				reg = <0x10 4>, <0x14 4>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 
-				#reset-cells = <2>;
-			};
+			#reset-cells = <3>;
+			intel,global-reset = <0x10 30 29>;
 
 			usb_phy: usb2-phy@18 {
 				compatible = "lantiq,ase-usb2-phy";
 				reg = <0x18 4>;
 				status = "disabled";
 
-				resets = <&reset 4 4>;
+				resets = <&rcu0 0x10 4 4>;
 				reset-names = "ctrl";
 				#phy-cells = <0>;
 			};

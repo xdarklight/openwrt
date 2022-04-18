@@ -1,0 +1,38 @@
+From 66b91a1c9bc03db27e10f1273ee22a5742ecd1cb Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Mon, 18 Apr 2022 21:59:40 +0200
+Subject: [PATCH 2/3] reset: intel: Add compatible string for the Amazon-SE,
+ Danube and xRX100
+
+Amazon-SE, Danube and xRX100 only have one reset request and one reset status
+register whereas xRX200 has two of each.
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ drivers/reset/reset-intel-gw.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+--- a/drivers/reset/reset-intel-gw.c
++++ b/drivers/reset/reset-intel-gw.c
+@@ -223,7 +223,7 @@ static int intel_reset_probe(struct plat
+ 	return 0;
+ }
+ 
+-static const struct intel_reset_soc xrx200_data = {
++static const struct intel_reset_soc xway_data = {
+ 	.legacy =		true,
+ 	.reset_cell_count =	3,
+ };
+@@ -234,8 +234,11 @@ static const struct intel_reset_soc lgm_
+ };
+ 
+ static const struct of_device_id intel_reset_match[] = {
++	{ .compatible = "intel,rcu-ase", .data = &xway_data },
++	{ .compatible = "intel,rcu-danube", .data = &xway_data },
+ 	{ .compatible = "intel,rcu-lgm", .data = &lgm_data },
+-	{ .compatible = "intel,rcu-xrx200", .data = &xrx200_data },
++	{ .compatible = "intel,rcu-xrx100", .data = &xway_data },
++	{ .compatible = "intel,rcu-xrx200", .data = &xway_data },
+ 	{}
+ };
+ 

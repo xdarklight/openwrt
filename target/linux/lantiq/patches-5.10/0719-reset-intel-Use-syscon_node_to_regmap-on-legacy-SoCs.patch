@@ -1,0 +1,79 @@
+From 65bedc47ea7deca3a6a82d9c3b1142a301f4b218 Mon Sep 17 00:00:00 2001
+From: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+Date: Mon, 18 Apr 2022 23:21:44 +0200
+Subject: [PATCH 3/3] reset: intel: Use syscon_node_to_regmap on legacy SoCs
+
+Older Lantiq (called "legacy") SoCs the RCU registers have more than
+just the reset controller registers. It additionally contains boot
+media selection information, up to two USB2 PHYs and configuration for
+various other peripherals (such as the PCIe PHY). use
+syscon_node_to_regmap() to obtain the regmap on these SoCs.
+
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@googlemail.com>
+---
+ drivers/reset/Kconfig          |  1 +
+ drivers/reset/reset-intel-gw.c | 29 +++++++++++++++++++----------
+ 2 files changed, 20 insertions(+), 10 deletions(-)
+
+--- a/drivers/reset/Kconfig
++++ b/drivers/reset/Kconfig
+@@ -79,6 +79,7 @@ config RESET_INTEL_GW
+ 	depends on X86 || LANTIQ || COMPILE_TEST
+ 	depends on OF && HAS_IOMEM
+ 	select REGMAP_MMIO
++	select MFD_SYSCON if LANTIQ
+ 	help
+ 	  This enables the reset controller driver for Intel Gateway SoCs.
+ 	  Say Y to control the reset signals provided by reset controller.
+--- a/drivers/reset/reset-intel-gw.c
++++ b/drivers/reset/reset-intel-gw.c
+@@ -5,6 +5,7 @@
+  */
+ 
+ #include <linux/bitfield.h>
++#include <linux/mfd/syscon.h>
+ #include <linux/init.h>
+ #include <linux/of_device.h>
+ #include <linux/platform_device.h>
+@@ -170,7 +171,6 @@ static int intel_reset_probe(struct plat
+ 	struct device_node *np = pdev->dev.of_node;
+ 	struct device *dev = &pdev->dev;
+ 	struct intel_reset_data *data;
+-	void __iomem *base;
+ 	u32 rb_id[3];
+ 	int ret;
+ 
+@@ -182,15 +182,24 @@ static int intel_reset_probe(struct plat
+ 	if (!data->soc_data)
+ 		return -ENODEV;
+ 
+-	base = devm_platform_ioremap_resource(pdev, 0);
+-	if (IS_ERR(base))
+-		return PTR_ERR(base);
+-
+-	data->regmap = devm_regmap_init_mmio(dev, base,
+-					     &intel_rcu_regmap_config);
+-	if (IS_ERR(data->regmap)) {
+-		dev_err(dev, "regmap initialization failed\n");
+-		return PTR_ERR(data->regmap);
++	if (data->soc_data->legacy) {
++		data->regmap = syscon_node_to_regmap(dev->of_node);
++		if (IS_ERR(data->regmap))
++			return dev_err_probe(dev, PTR_ERR(data->regmap),
++					     "Failed to get regmap from syscon node\n");
++	} else {
++		void __iomem *base;
++
++		base = devm_platform_ioremap_resource(pdev, 0);
++		if (IS_ERR(base))
++			return PTR_ERR(base);
++
++		data->regmap = devm_regmap_init_mmio(dev, base,
++						     &intel_rcu_regmap_config);
++		if (IS_ERR(data->regmap)) {
++			dev_err(dev, "regmap initialization failed\n");
++			return PTR_ERR(data->regmap);
++		}
+ 	}
+ 
+ 	ret = device_property_read_u32_array(dev, "intel,global-reset", rb_id,
