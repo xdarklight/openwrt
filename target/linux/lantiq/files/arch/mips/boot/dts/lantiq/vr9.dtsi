@@ -107,39 +107,29 @@
 			lantiq,rcu-endian-offset = <0x4c>;
 			lantiq,rcu-big-endian-mask = <0x80>; /* bit 7 */
 			big-endian;
-			resets = <&reset0 12 24>, <&reset0 22 22>;
+			resets = <&rcu0 0x10 12 24>, <&rcu0 0x10 22 22>;
 			reset-names = "phy", "pcie";
 			#phy-cells = <1>;
 		};
 
 		rcu0: rcu@203000 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "lantiq,xrx200-rcu", "simple-mfd", "syscon";
+			compatible = "intel,rcu-xrx200", "simple-mfd", "syscon";
 			reg = <0x203000 0x100>;
 			ranges = <0x0 0x203000 0x100>;
 			big-endian;
 
-			reset0: reset-controller@10 {
-				compatible = "lantiq,xrx200-reset";
-				reg = <0x10 4>, <0x14 4>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 
-				#reset-cells = <2>;
-			};
-
-			reset1: reset-controller@48 {
-				compatible = "lantiq,xrx200-reset";
-				reg = <0x48 4>, <0x24 4>;
-
-				#reset-cells = <2>;
-			};
+			#reset-cells = <3>;
+			intel,global-reset = <0x10 30 29>;
 
 			usb_phy0: usb2-phy@18 {
 				compatible = "lantiq,xrx200-usb2-phy";
 				reg = <0x18 4>, <0x38 4>;
 				status = "disabled";
 
-				resets = <&reset1 4 4>, <&reset0 4 4>;
+				resets = <&rcu0 0x48 4 4>, <&rcu0 0x10 4 4>;
 				reset-names = "phy", "ctrl";
 				#phy-cells = <0>;
 			};
@@ -149,7 +139,7 @@
 				reg = <0x34 4>, <0x3c 4>;
 				status = "disabled";
 
-				resets = <&reset1 5 5>, <&reset0 4 4>;
+				resets = <&rcu0 0x48 5 5>, <&rcu0 0x10 4 4>;
 				reset-names = "phy", "ctrl";
 				#phy-cells = <0>;
 			};
@@ -467,14 +457,14 @@
 				gphy0: gphy@20 {
 					reg = <0x20>;
 
-					resets = <&reset0 31 30>;
+					resets = <&rcu0 0x10 31 30>;
 					reset-names = "gphy";
 				};
 
 				gphy1: gphy@68 {
 					reg = <0x68>;
 
-					resets = <&reset0 29 28>;
+					resets = <&rcu0 0x10 29 28>;
 					reset-names = "gphy";
 				};
 			};
@@ -486,7 +476,7 @@
 			interrupt-parent = <&icu0>;
 			interrupts = <73>, <72>;
 			interrupt-names = "tx", "rx";
-			resets = <&reset0 21 16>, <&reset0 8 8>, <&reset0 3 3>;
+			resets = <&rcu0 0x10 21 16>, <&rcu0 0x10 8 8>, <&rcu0 0x10 3 3>;
 			reset-names = "switch", "ppe", "ppe_dsp";
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -509,7 +499,7 @@
 			reg = <0xe234000 0x3ffd>;
 			interrupt-parent = <&icu0>;
 			interrupts = <96>;
-			resets = <&reset0 3 3>, <&reset0 11 11>, <&reset0 23 23>;
+			resets = <&rcu0 0x10 3 3>, <&rcu0 0x10 11 11>, <&rcu0 0x10 23 23>;
 			reset-names = "dsp", "dfe", "tc";
 		};
 
@@ -528,7 +518,7 @@
 			phys = <&pcie0_phy LANTIQ_PCIE_PHY_MODE_36MHZ>;
 			phy-names = "pcie";
 
-			resets = <&reset0 22 22>;
+			resets = <&rcu0 0x10 22 22>;
 
 			lantiq,rcu = <&rcu0>;
 
