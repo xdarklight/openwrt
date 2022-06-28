@@ -274,6 +274,33 @@
 		ebu0: ebu@e105300 {
 			compatible = "lantiq,ebu-xway";
 			reg = <0xe105300 0x100>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges;
+
+			big-endian;
+
+			ebunand: nand-controller@e1053b0 {
+				compatible = "lantiq,danube-ebunand";
+				reg = <0xe1053b0 0x14>,
+				      <0x4000000 0x1000>,
+				      <0x4000000 0x1000>,
+				      <0x4000000 0x4>,
+				      <0x4000000 0x4>;
+				reg-names = "ebunand",
+					    "nand_cs0",
+					    "nand_cs1",
+					    "addr_sel0",
+					    "addr_sel1";
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				pinctrl-0 = <&nand_pins>, <&nand_cs1_pins>;
+				pinctrl-names = "default";
+
+				status = "disabled";
+			};
 		};
 
 		mei@e116000 {

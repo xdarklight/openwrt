@@ -81,17 +81,14 @@
 	};
 };
 
-&localbus {
-	flash@0 {
-		compatible = "lantiq,nand-xway";
-		bank-width = <2>;
-		reg = <0 0x0 0x2000000>;
-		lantiq,cs = <1>;
+&ebunand {
+	status = "okay";
 
-		pinctrl-0 = <&nand_pins>, <&nand_cs1_pins>;
-		pinctrl-names = "default";
+	nand@1 {
+		reg = <1>;
 
 		nand-use-soft-ecc-engine;
+		nand-ecc-algo = "hamming";
 
 		partitions {
 			compatible = "fixed-partitions";

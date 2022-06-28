@@ -5,14 +5,11 @@
 	model = "AVM FRITZ!Box 3370 Rev. 2 (Micron NAND)";
 };
 
-&localbus {
-	flash1: flash@1 {
-		compatible = "lantiq,nand-xway";
-		bank-width = <2>;
-		reg = <1 0x0 0x2000000>;
+&ebunand {
+	status = "okay";
 
-		pinctrl-0 = <&nand_pins>, <&nand_cs1_pins>;
-		pinctrl-names = "default";
+	flash1: nand@1 {
+		reg = <1>;
 
 		nand-ecc-engine = <&flash1>;
 

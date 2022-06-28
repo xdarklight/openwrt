@@ -106,6 +106,32 @@
 	};
 };
 
+&ebunand {
+	status = "okay";
+
+	flash1: nand@1 {
+		reg = <1>;
+
+		nand-ecc-engine = <&flash1>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "kernel";
+				reg = <0x0 0x400000>;
+			};
+
+			partition@400000 {
+				label = "ubi";
+				reg = <0x400000 0x7c00000>;
+			};
+		};
+	};
+};
+
 &gphy0 {
 	lantiq,gphy-mode = <GPHY_MODE_GE>;
 };
@@ -225,35 +251,6 @@
 				reg = <0x30000 0x10000>;
 				label = "tffs (2)";
 				read-only;
-			};
-		};
-	};
-};
-
-&localbus {
-	flash1: flash@1 {
-		compatible = "lantiq,nand-xway";
-		bank-width = <1>;
-		reg = <1 0x0 0x2000000>;
-
-		pinctrl-0 = <&nand_pins>;
-		pinctrl-names = "default";
-
-		nand-ecc-engine = <&flash1>;
-
-		partitions {
-			compatible = "fixed-partitions";
-			#address-cells = <1>;
-			#size-cells = <1>;
-
-			partition@0 {
-				label = "kernel";
-				reg = <0x0 0x400000>;
-			};
-
-			partition@400000 {
-				label = "ubi";
-				reg = <0x400000 0x7c00000>;
 			};
 		};
 	};

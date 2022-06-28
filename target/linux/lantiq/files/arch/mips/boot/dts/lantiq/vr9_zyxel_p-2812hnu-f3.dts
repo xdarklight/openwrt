@@ -5,6 +5,26 @@
 	model = "ZyXEL P-2812HNU-F3";
 };
 
+&ebunand {
+	status = "okay";
+
+	nand@1 {
+		reg = <1>;
+
+		nand-use-soft-ecc-engine;
+		nand-ecc-algo = "hamming";
+
+		partition@0 {
+			label = "kernel";
+			reg = <0x0 0x200000>;
+		};
+		partition@200000 {
+			label = "ubi";
+			reg = <0x200000 0x7e00000>;
+		};
+	};
+};
+
 &pci0 {
 	wifi@1814,3092 {
 		compatible = "pci1814,3092";
@@ -40,26 +60,6 @@
 				label = "unused";
 				reg = <0x60000 0x7a0000>;
 			};
-		};
-	};
-
-	flash@1 {
-		compatible = "lantiq,nand-xway";
-		lantiq,cs = <1>;
-		bank-width = <2>;
-		reg = <1 0x0 0x2000000>;
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		nand-use-soft-ecc-engine;
-
-		partition@0 {
-			label = "kernel";
-			reg = <0x0 0x200000>;
-		};
-		partition@200000 {
-			label = "ubi";
-			reg = <0x200000 0x7e00000>;
 		};
 	};
 };

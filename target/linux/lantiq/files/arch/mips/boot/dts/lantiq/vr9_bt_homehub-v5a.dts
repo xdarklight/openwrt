@@ -114,6 +114,48 @@
 	};
 };
 
+&ebunand {
+	status = "okay";
+
+	nand@1 {
+		reg = <1>;
+
+		nand-on-flash-bbt;
+		nand-ecc-strength = <3>;
+		nand-ecc-step-size = <256>;
+		nand-use-soft-ecc-engine;
+		nand-ecc-algo = "hamming";
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "u-boot";
+				reg = <0x0 0xa0000>;
+				read-only;
+			};
+			partition@a0000 {
+				label = "u-boot-env";
+				reg = <0xa0000 0x20000>;
+				read-only;
+			};
+			partition@c0000 {
+				label = "unused";
+				reg = <0xc0000 0x40000>;
+			};
+			partition@100000 {
+				label = "ubi";
+				reg = <0x100000 0x7e80000>;
+			};
+			/*
+			 * last 512 KiB are for the bad block table, not writable
+			 */
+		};
+	};
+};
+
 &gphy0 {
 	lantiq,gphy-mode = <GPHY_MODE_GE>;
 };
@@ -200,51 +242,6 @@
 		label = "wan";
 		phy-mode = "rgmii";
 		phy-handle = <&phy5>;
-	};
-};
-
-&localbus {
-	flash@1 {
-		compatible = "lantiq,nand-xway";
-		lantiq,cs = <1>;
-		bank-width = <2>;
-		reg = <0x1 0x0 0x2000000>;
-
-		pinctrl-0 = <&nand_pins>, <&nand_cs1_pins>;
-		pinctrl-names = "default";
-
-		nand-on-flash-bbt;
-		nand-ecc-strength = <3>;
-		nand-ecc-step-size = <256>;
-		nand-use-soft-ecc-engine;
-
-		partitions {
-			compatible = "fixed-partitions";
-			#address-cells = <1>;
-			#size-cells = <1>;
-
-			partition@0 {
-				label = "u-boot";
-				reg = <0x0 0xa0000>;
-				read-only;
-			};
-			partition@a0000 {
-				label = "u-boot-env";
-				reg = <0xa0000 0x20000>;
-				read-only;
-			};
-			partition@c0000 {
-				label = "unused";
-				reg = <0xc0000 0x40000>;
-			};
-			partition@100000 {
-				label = "ubi";
-				reg = <0x100000 0x7e80000>;
-			};
-			/*
-			 * last 512 KiB are for the bad block table, not writable
-			 */
-		};
 	};
 };
 

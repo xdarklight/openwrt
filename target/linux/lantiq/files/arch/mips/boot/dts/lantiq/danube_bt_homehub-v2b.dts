@@ -101,6 +101,40 @@
 	};
 };
 
+&ebunand {
+	status = "okay";
+
+	nand@1 {
+		/* NAND Flash: Samsung K9F5608U0D-JIB0 32MB */
+		reg = <1>;
+
+		nand-use-soft-ecc-engine;
+		nand-ecc-algo = "hamming";
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			ath9k_cal: partition@0 {
+				label = "art";	   /* Atheros 9160 wifi b/g/n radio EEPROM */
+				reg = <0x00000 0x4000>;
+				read-only;
+			};
+
+			partition@4000 {
+				label = "kernel";
+				reg = <0x4000 0x200000>;
+			};
+
+			partition@164000 {
+				label = "ubi";
+				reg = <0x204000 0x1dfc000>;
+			};
+		};
+	};
+};
+
 &gpio {
 	pinctrl-names = "default";
 	pinctrl-0 = <&state_default>;
@@ -169,41 +203,6 @@
 			partition@70000 {
 				label = "rg_conf_factory";
 				reg = <0x70000 0x10000>;
-			};
-		};
-	};
-
-	flash@1 {		  /* NAND Flash: Samsung K9F5608U0D-JIB0 32MB */
-		compatible = "lantiq,nand-xway";
-		lantiq,cs = <1>;
-		bank-width = <2>;
-		reg = <1 0x0 0x2000000 >;
-		req-mask = <0x1>;  /* PCI request lines to mask during NAND access */
-
-		pinctrl-0 = <&nand_pins>, <&nand_cs1_pins>;
-		pinctrl-names = "default";
-
-		nand-use-soft-ecc-engine;
-
-		partitions {
-			compatible = "fixed-partitions";
-			#address-cells = <1>;
-			#size-cells = <1>;
-
-			ath9k_cal: partition@0 {
-				label = "art";	   /* Atheros 9160 wifi b/g/n radio EEPROM */
-				reg = <0x00000 0x4000>;
-				read-only;
-			};
-
-			partition@4000 {
-				label = "kernel";
-				reg = <0x4000 0x200000>;
-			};
-
-			partition@164000 {
-				label = "ubi";
-				reg = <0x204000 0x1dfc000>;
 			};
 		};
 	};
